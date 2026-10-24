@@ -38,6 +38,8 @@ export const RestaurantDashboard: React.FC = () => {
     deleteFoodItem, 
     toggleSoldOut, 
     registerTableTag,
+    bulkGenerateTables,
+    deleteTable,
     updateRestaurantMeta,
     showNotification 
   } = useApp();
@@ -57,6 +59,7 @@ export const RestaurantDashboard: React.FC = () => {
 
   // Add Table state
   const [newTableNumber, setNewTableNumber] = useState('');
+  const [bulkCount, setBulkCount] = useState(5);
 
   const design = activeRestaurant.design;
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -555,7 +558,8 @@ export const RestaurantDashboard: React.FC = () => {
               <div>
                 <h2 className="text-base font-extrabold text-neutral-900">Table QR Codes & Direct Links</h2>
                 <p className="text-xs text-neutral-500">
-                  Every table has a unique link & scannable QR code. When scanned at Table 5, orders are sent directly from Table 5!
+                  Every table gets a unique QR code & link. Orders arrive in the kitchen labelled with the exact table.{' '}
+                  You have <strong>{activeRestaurant.tables.length}</strong> table{activeRestaurant.tables.length !== 1 ? 's' : ''}.
                 </p>
               </div>
 
@@ -570,14 +574,40 @@ export const RestaurantDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Quick Add Table Form */}
+            {/* Bulk Generate Panel */}
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-amber-900 mb-0.5">Bulk Generate Tables</div>
+                <div className="text-[11px] text-amber-700">
+                  Instantly create numbered tables (starts from Table {activeRestaurant.tables.length + 1}).
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={bulkCount}
+                  onChange={(e) => setBulkCount(Math.max(1, Math.min(100, Number(e.target.value))))}
+                  className="w-16 px-2 py-2 text-center bg-white border border-amber-300 rounded-xl text-xs font-bold focus:outline-none focus:border-amber-500"
+                />
+                <button
+                  onClick={() => bulkGenerateTables(bulkCount)}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-colors"
+                >
+                  Generate {bulkCount} Table{bulkCount !== 1 ? 's' : ''}
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Add Single Custom Table Form */}
             <form onSubmit={handleAddTable} className="bg-white rounded-2xl border border-neutral-200 p-4 shadow-xs flex items-center gap-2">
               <input
                 type="text"
                 required
                 value={newTableNumber}
                 onChange={(e) => setNewTableNumber(e.target.value)}
-                placeholder="Add Table (e.g. Table 6, VIP 1, Patio 3)"
+                placeholder="Add custom table (e.g. VIP 1, Rooftop 2, Bar)"
                 className="flex-1 px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-xs focus:outline-none focus:border-neutral-900"
               />
               <button
@@ -587,6 +617,7 @@ export const RestaurantDashboard: React.FC = () => {
                 + Add Table
               </button>
             </form>
+
 
             {/* Tables Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -600,8 +631,17 @@ export const RestaurantDashboard: React.FC = () => {
                     className="bg-white rounded-2xl border border-neutral-200 p-4 shadow-xs flex flex-col justify-between text-center break-inside-avoid"
                   >
                     <div>
-                      <div className="font-black text-sm font-mono text-neutral-900 mb-1">
-                        {tbl.tableNumber}
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="font-black text-sm font-mono text-neutral-900">
+                          {tbl.tableNumber}
+                        </div>
+                        <button
+                          onClick={() => deleteTable(tbl.id)}
+                          title="Remove table"
+                          className="p-1 text-neutral-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
 
                       {/* Scannable QR Code */}

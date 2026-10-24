@@ -73,6 +73,8 @@ interface AppContextType {
 
   // NFC & Tables
   registerTableTag: (tableNumber: string, label: string, section: string, nfcSerial: string) => void;
+  bulkGenerateTables: (count: number) => void;
+  deleteTable: (tableId: string) => void;
   updateTableStatus: (tableId: string, status: NfcStatus) => void;
   replaceDamagedTag: (tableId: string, newSerial: string) => void;
 
@@ -557,6 +559,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
+  const bulkGenerateTables = (count: number) => {
+    if (count < 1 || count > 100) return;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    setRestaurants(prev => prev.map(r => {
+      if (r.id !== activeRestaurantId) return r;
+      const existing = r.tables.length;
+      const slug = r.slug;
+      const newTables = Array.from({ length: count }, (_, i) => {
+        const num = existing + i + 1;
+        return {
+          id: `tbl-${r.id}-${num}-${Date.now() + i}`,
+          tableNumber: `Table ${num}`,
+          label: `Table ${num}`,
+          section: 'Dining Room',
+          ntagSerial: `04:${Math.floor(Math.random() * 89 + 10)}:${num.toString().padStart(2, '0')}:${Math.floor(Math.random() * 89 + 10)}`,
+          nfcStatus: 'active' as const,
+          totalTaps: 0,
+          totalScans: 0,
+          urlPayload: `${origin}/?r=${slug}&table=Table+${num}`
+        };
+      });
+      return { ...r, tables: [...r.tables, ...newTables] };
+    }));
+    showNotification(`Generated ${count} new table${count > 1 ? 's' : ''}`);
+  };
+
+  const deleteTable = (tableId: string) => {
+    setRestaurants(prev => prev.map(r => {
+      if (r.id !== activeRestaurantId) return r;
+      return { ...r, tables: r.tables.filter(t => t.id !== tableId) };
+    }));
+    showNotification('Table removed');
+  };
+
   // Cart & Ordering
   const addToCart = (item: FoodItem, notes?: string, qty: number = 1) => {
     setCart(prev => {
@@ -697,6 +733,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteFoodItem,
         toggleSoldOut,
         registerTableTag,
+        bulkGenerateTables,
+        deleteTable,
         updateTableStatus,
         replaceDamagedTag,
         addToCart,
