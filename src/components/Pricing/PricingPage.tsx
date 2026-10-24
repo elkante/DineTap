@@ -115,8 +115,8 @@ export const PricingPage: React.FC<PricingPageProps> = ({
             }`}
           >
             <span>Annual Billing</span>
-            <span className="px-1.5 py-0.5 rounded-md bg-amber-400 text-neutral-950 text-[10px] font-black uppercase">
-              Save ~17%
+            <span className="px-2 py-0.5 rounded-md bg-amber-400 text-neutral-950 text-[10px] font-black uppercase tracking-wide">
+              2 Mos Free + Free Cards
             </span>
           </button>
         </div>
@@ -181,9 +181,20 @@ export const PricingPage: React.FC<PricingPageProps> = ({
                       </span>
                     </div>
                     {isAnnual && (
-                      <p className={`text-[11px] font-semibold mt-1 ${isHighlighted ? 'text-amber-300' : 'text-emerald-700'}`}>
-                        ~₦{Math.round(price / 12).toLocaleString()}/mo (Save ~2 mos)
-                      </p>
+                      <div className="mt-2.5 space-y-1">
+                        <p className={`text-[11px] font-bold ${isHighlighted ? 'text-amber-300' : 'text-emerald-700'}`}>
+                          ~₦{Math.round(price / 12).toLocaleString()}/mo &middot; Pay for 10 mos, get 12
+                        </p>
+                        {p.annualIncentive && (
+                          <div className={`p-2 rounded-xl text-[10px] font-semibold border ${
+                            isHighlighted
+                              ? 'bg-amber-400/15 border-amber-400/30 text-amber-200'
+                              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                          }`}>
+                            🎁 {p.annualIncentive}
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
 

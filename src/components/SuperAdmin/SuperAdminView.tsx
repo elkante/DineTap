@@ -189,9 +189,9 @@ export const SuperAdminView: React.FC = () => {
   );
   // Dynamic plan pricing references
   const basicPrice = plans.find(p => p.id === 'basic')?.monthlyPrice || 8000;
-  const standardPrice = plans.find(p => p.id === 'standard')?.monthlyPrice || 19000;
-  const premiumPrice = plans.find(p => p.id === 'premium')?.monthlyPrice || 30000;
-  const enterprisePrice = plans.find(p => p.id === 'enterprise')?.monthlyPrice || 70000;
+  const standardPrice = plans.find(p => p.id === 'standard')?.monthlyPrice || 13000;
+  const premiumPrice = plans.find(p => p.id === 'premium')?.monthlyPrice || 21000;
+  const enterprisePrice = plans.find(p => p.id === 'enterprise')?.monthlyPrice || 35000;
 
   // Estimated MRR based on dynamically configured plans
   const estimatedMrr = tenants.reduce((acc, t) => {
@@ -726,6 +726,20 @@ export const SuperAdminView: React.FC = () => {
                             className="w-full pl-7 pr-3 py-1.5 bg-neutral-900 border border-neutral-700 rounded-xl text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-400"
                           />
                         </div>
+                      </div>
+
+                      {/* Annual Incentive Perk */}
+                      <div className="mb-3">
+                        <label className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1">
+                          🎁 Annual Incentive Perk
+                        </label>
+                        <input
+                          type="text"
+                          value={p.annualIncentive || ''}
+                          placeholder="e.g. Save ₦26k (2 Mos Free) + 5 Free Smart Cards"
+                          onChange={(e) => handleUpdatePlan(p.id, { annualIncentive: e.target.value })}
+                          className="w-full px-3 py-1.5 bg-neutral-900 border border-neutral-700 rounded-xl text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400"
+                        />
                       </div>
 
                       {/* Max Tables Input */}

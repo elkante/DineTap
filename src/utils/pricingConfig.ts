@@ -7,6 +7,7 @@ export interface PlanTier {
   maxTables: number | null; // null = unlimited
   tagline: string;
   features: string[];
+  annualIncentive?: string;
   recommended?: boolean;
 }
 
@@ -18,6 +19,7 @@ export const DEFAULT_PLANS: PlanTier[] = [
     annualPrice: 80000,
     maxTables: 10,
     tagline: 'Ideal for small cafes, juice bars & neighborhood bistros',
+    annualIncentive: 'Save ₦16,000 (2 Mos Free) + 2 Free Smart Cards (₦14,000 value)',
     features: [
       'Up to 10 Dining Tables',
       'Realistic 3D Flipbook Digital Menu',
@@ -33,10 +35,11 @@ export const DEFAULT_PLANS: PlanTier[] = [
     id: 'standard',
     name: 'Standard',
     badge: 'Popular',
-    monthlyPrice: 19000,
-    annualPrice: 190000,
+    monthlyPrice: 13000,
+    annualPrice: 130000,
     maxTables: 20,
     tagline: 'Perfect for fast-growing restaurants & casual dining',
+    annualIncentive: 'Save ₦26,000 (2 Mos Free) + 5 Free Smart Cards (₦35,000 value)',
     features: [
       'Up to 20 Dining Tables',
       'Everything in Basic',
@@ -53,10 +56,11 @@ export const DEFAULT_PLANS: PlanTier[] = [
     id: 'premium',
     name: 'Premium',
     badge: 'High Volume',
-    monthlyPrice: 30000,
-    annualPrice: 300000,
+    monthlyPrice: 21000,
+    annualPrice: 210000,
     maxTables: 60,
     tagline: 'For busy lounges, clubs, rooftop bars & multi-floor dining',
+    annualIncentive: 'Save ₦42,000 (2 Mos Free) + 10 Free Smart Cards (₦70,000 value)',
     features: [
       'Up to 60 Dining Tables',
       'Everything in Standard',
@@ -71,10 +75,11 @@ export const DEFAULT_PLANS: PlanTier[] = [
     id: 'enterprise',
     name: 'Enterprise',
     badge: 'Unlimited',
-    monthlyPrice: 70000,
-    annualPrice: 700000,
+    monthlyPrice: 35000,
+    annualPrice: 350000,
     maxTables: null,
     tagline: 'For restaurant chains, hotel dining & large hospitality venues',
+    annualIncentive: 'Save ₦70,000 (2 Mos Free) + 20 Free Smart Cards (₦140,000 value)',
     features: [
       'Unlimited Dining Tables & Bars',
       'Everything in Premium',
@@ -87,7 +92,7 @@ export const DEFAULT_PLANS: PlanTier[] = [
   }
 ];
 
-const STORAGE_KEY_PLANS = 'dinetap_subscription_plans_v1';
+const STORAGE_KEY_PLANS = 'tapmenu_subscription_plans_v2';
 
 export function getStoredPlans(): PlanTier[] {
   try {
