@@ -213,67 +213,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({
         </div>
       </section>
 
-      {/* Acrylic Table Stands Add-On */}
-      <section className="max-w-6xl mx-auto px-4 py-12">
-        <div className="bg-white rounded-3xl border border-stone-200 p-8 sm:p-10 shadow-sm">
-          <div className="max-w-2xl mb-8">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-amber-800 font-bold block mb-1">
-              PHYSICAL HARDWARE
-            </span>
-            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900">
-              Acrylic Standees with Digital NFC Cards
-            </h2>
-            <p className="text-xs sm:text-sm text-stone-600 mt-2 leading-relaxed">
-              Durable, spill-resistant table standees encoded for your tables with scannable QR and instant tap NFC. 
-              Delivered anywhere in Nigeria within 48–72 hours.
-            </p>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-5 rounded-2xl bg-stone-50 border border-stone-200 flex flex-col justify-between">
-              <div>
-                <span className="text-xs font-bold text-stone-800 block">10 Table Standees Pack</span>
-                <span className="text-2xl font-black font-mono text-stone-900 mt-1 block">₦45,000</span>
-                <p className="text-[11px] text-stone-500 mt-1">₦4,500 per table. Ideal for cafes & small venues.</p>
-              </div>
-              <ul className="text-xs text-stone-600 space-y-1.5 mt-4 pt-4 border-t border-stone-200">
-                <li>✓ 10 Crystal-clear acrylic stands</li>
-                <li>✓ 10 Encoded Digital Smart Cards & QR</li>
-                <li>✓ Free Lagos dispatch</li>
-              </ul>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-amber-50/50 border-2 border-amber-300 flex flex-col justify-between relative shadow-xs">
-              <span className="absolute -top-2.5 right-4 bg-amber-500 text-neutral-950 text-[9px] font-black uppercase px-2 py-0.5 rounded-full">
-                Most Popular
-              </span>
-              <div>
-                <span className="text-xs font-bold text-stone-900 block">25 Table Standees Pack</span>
-                <span className="text-2xl font-black font-mono text-stone-900 mt-1 block">₦95,000</span>
-                <p className="text-[11px] text-stone-600 mt-1">₦3,800 per table (Save ₦17,500). Mid-size venues.</p>
-              </div>
-              <ul className="text-xs text-stone-700 space-y-1.5 mt-4 pt-4 border-t border-amber-200">
-                <li>✓ 25 Heavy-base acrylic stands</li>
-                <li>✓ Custom restaurant logo branding</li>
-                <li>✓ Free nationwide dispatch</li>
-              </ul>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-stone-50 border border-stone-200 flex flex-col justify-between">
-              <div>
-                <span className="text-xs font-bold text-stone-800 block">50 Table Standees Pack</span>
-                <span className="text-2xl font-black font-mono text-stone-900 mt-1 block">₦175,000</span>
-                <p className="text-[11px] text-stone-500 mt-1">₦3,500 per table (Save ₦50,000). Clubs & lounges.</p>
-              </div>
-              <ul className="text-xs text-stone-600 space-y-1.5 mt-4 pt-4 border-t border-stone-200">
-                <li>✓ 50 Luxury metallic-trim stands</li>
-                <li>✓ Complete dining room + VIP setup</li>
-                <li>✓ Replacement warranty included</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Comparison Table */}
       <section className="max-w-6xl mx-auto px-4 py-12">

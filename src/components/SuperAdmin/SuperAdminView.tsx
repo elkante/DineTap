@@ -602,7 +602,7 @@ export const SuperAdminView: React.FC = () => {
               <h3 className="text-base font-bold text-white mb-2">Digital Cards & Table Stand Logistics</h3>
               <p className="text-xs text-neutral-400 max-w-2xl leading-relaxed">
                 Physical hardware fulfillment generates immediate upfront revenue on every table deployment in Nigeria. 
-                Average production cost is ₦1,800 – ₦2,500 per acrylic stand with embedded digital card, charged at ₦5,000 – ₦7,500.
+                Average production cost is ₦1,600 per card, charged at ₦7,000 per card (generating ₦5,400 net profit per table setup).
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
