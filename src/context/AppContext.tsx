@@ -11,7 +11,7 @@ import {
   Order, 
   WaiterCall 
 } from '../types';
-import { INITIAL_RESTAURANTS, TEMPLATE_PRESETS } from '../data/initialData';
+import { INITIAL_RESTAURANTS, TEMPLATE_PRESETS, createDefaultRestaurantTenant } from '../data/initialData';
 import { playKitchenChime } from '../utils/audio';
 import { 
   syncOrderToSupabase, 
@@ -96,18 +96,52 @@ const AppContext = createContext<AppContextType | null>(null);
 const STORAGE_KEY_ORDERS = 'dinetap_orders_v2';
 const STORAGE_KEY_CALLS = 'dinetap_calls_v2';
 
+const EMPTY_RESTAURANT: RestaurantTenant = {
+  id: '',
+  slug: '',
+  name: 'Restaurant Menu',
+  tagline: 'Kitchen & Bar',
+  logo: '🛡️',
+  coverImage: '',
+  address: '',
+  phone: '',
+  openingHours: 'Open Daily: 11:00 AM - 11:00 PM',
+  plan: 'Growth QR+Menu',
+  status: 'active',
+  quickMenuEnabled: true,
+  allowOrdering: true,
+  tableOrderingEnabled: true,
+  design: {
+    templateId: 'emerald_gold',
+    paperTexture: 'emerald_leather',
+    fontStyle: 'serif_luxury',
+    primaryColor: '#0c2e22',
+    accentColor: '#d4af37',
+    coverColor: '#0c2e22',
+    textColor: '#1c1917',
+    secondaryTextColor: '#78716c',
+    borderColor: '#e7e5e4',
+    showPageNumbers: true,
+    enableAudioEffect: true,
+    showPriceSymbols: true,
+    currencySymbol: '₦',
+  },
+  tables: [],
+  pages: []
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Load restaurants: check local storage first, then fallback to initial template
+  // Load restaurants: check local storage first (NO mock fallback)
   const [restaurants, setRestaurants] = useState<RestaurantTenant[]>(() => {
-    const stored = getStoredRestaurants();
-    if (stored.length > 0) return stored;
-    return INITIAL_RESTAURANTS;
+    return getStoredRestaurants();
   });
 
   const [activeRestaurantId, setActiveRestaurantId] = useState<string>(() => {
     const stored = getStoredRestaurants();
+    const sess = getActiveSession();
+    if (sess?.restaurantId) return sess.restaurantId;
     if (stored.length > 0) return stored[0].id;
-    return INITIAL_RESTAURANTS[0]?.id || 'rest-lagos-bites';
+    return '';
   });
 
   const [currentView, setCurrentView] = useState<AppViewMode>('flipbook');
@@ -194,13 +228,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsCustomerRoute(false);
       setRestaurantNotFound(false);
 
-      // If owner session exists, lock active restaurant to their restaurant
+      // If owner session exists, restore their restaurant
       const session = getActiveSession();
       if (session) {
         setOwnerSessionState(session);
         const owned = restaurants.find(r => r.id === session.restaurantId || r.slug === session.restaurantSlug);
         if (owned) {
           setActiveRestaurantId(owned.id);
+        } else if (session.restaurantSlug) {
+          // Remember user logged in: restore from Supabase
+          fetchRestaurantBySlug(session.restaurantSlug).then(remote => {
+            if (remote) {
+              setRestaurants(prev => [remote, ...prev.filter(r => r.id !== remote.id)]);
+              setActiveRestaurantId(remote.id);
+            }
+          }).catch(console.warn);
         }
       }
     }
@@ -269,7 +311,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [orders]);
 
   // Active restaurant reference
-  const activeRestaurant = restaurants.find(r => r.id === activeRestaurantId) || restaurants[0] || INITIAL_RESTAURANTS[0];
+  const activeRestaurant = restaurants.find(r => r.id === activeRestaurantId) || restaurants[0] || EMPTY_RESTAURANT;
 
   const showNotification = (msg: string) => {
     setNotificationMsg(msg);
@@ -614,31 +656,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const createNewTenant = (name: string, templateId: MenuTemplateId) => {
     const cleanSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const newId = `rest-${Date.now()}`;
-    const preset = TEMPLATE_PRESETS[templateId] || TEMPLATE_PRESETS.nigerian;
-
-    const newRest: RestaurantTenant = {
-      id: newId,
-      slug: cleanSlug,
-      name,
-      tagline: 'Fresh Flavours & Quality Dining',
-      logo: '🍽️',
-      coverImage: '/src/assets/images/dish_jollof_chicken_1792837966503.jpg',
-      address: 'Main Street',
-      phone: '+234 800 000 0000',
-      openingHours: '10:00 AM - 10:00 PM',
-      plan: 'Growth QR+Menu',
-      status: 'active',
-      quickMenuEnabled: true,
-      allowOrdering: true,
-      tableOrderingEnabled: true,
-      design: { ...preset.design },
-      tables: [],
-      pages: []
-    };
+    const newRest = createDefaultRestaurantTenant(name, cleanSlug, { templateId });
 
     setRestaurants(prev => [...prev, newRest]);
-    setActiveRestaurantId(newId);
+    setActiveRestaurantId(newRest.id);
   };
 
   return (

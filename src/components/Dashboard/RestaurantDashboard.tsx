@@ -694,6 +694,39 @@ export const RestaurantDashboard: React.FC = () => {
               </div>
 
               <div>
+                <label className="block font-bold text-neutral-600 mb-1">Signature Menu Book Leather Color</label>
+                <div className="flex items-center gap-2 p-2.5 bg-neutral-50 border border-neutral-200 rounded-xl">
+                  {[
+                    { name: 'Emerald Leather', hex: '#0c2e22', border: '#D4AF37' },
+                    { name: 'Burgundy Wine', hex: '#4a0e17', border: '#D4AF37' },
+                    { name: 'Midnight Navy', hex: '#0f172a', border: '#eab308' },
+                    { name: 'Espresso Leather', hex: '#2b1810', border: '#f59e0b' },
+                    { name: 'Warm Terracotta', hex: '#7c2d12', border: '#f59e0b' },
+                    { name: 'Charcoal Slate', hex: '#1f2421', border: '#d97706' },
+                  ].map(preset => (
+                    <button
+                      type="button"
+                      key={preset.hex}
+                      onClick={() => updateRestaurantMeta({ design: { ...activeRestaurant.design, coverColor: preset.hex, primaryColor: preset.hex } })}
+                      className={`w-7 h-7 rounded-full border-2 transition-all ${
+                        (activeRestaurant.design.coverColor || activeRestaurant.design.primaryColor) === preset.hex ? 'scale-110 ring-2 ring-amber-400 shadow-md' : 'opacity-80'
+                      }`}
+                      style={{ backgroundColor: preset.hex, borderColor: preset.border }}
+                      title={preset.name}
+                    />
+                  ))}
+                  <div className="h-5 w-[1px] bg-neutral-300 mx-1" />
+                  <input
+                    type="color"
+                    value={activeRestaurant.design.coverColor || activeRestaurant.design.primaryColor || '#0c2e22'}
+                    onChange={(e) => updateRestaurantMeta({ design: { ...activeRestaurant.design, coverColor: e.target.value, primaryColor: e.target.value } })}
+                    className="w-7 h-7 rounded-lg cursor-pointer bg-transparent border-0"
+                    title="Pick custom hex color"
+                  />
+                </div>
+              </div>
+
+              <div>
                 <label className="block font-bold text-neutral-600 mb-1">Currency Symbol</label>
                 <input
                   type="text"

@@ -24,8 +24,9 @@ export const FlipbookViewer: React.FC = () => {
     addToCart, 
   } = useApp();
 
-  const pages = activeRestaurant.pages;
+  const pages = activeRestaurant.pages || [];
   const design = activeRestaurant.design;
+  const coverThemeColor = design?.coverColor || design?.primaryColor || '#0c2e22';
 
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
@@ -50,7 +51,6 @@ export const FlipbookViewer: React.FC = () => {
     const deltaX = e.changedTouches[0].clientX - touchStartX.current;
     const deltaY = e.changedTouches[0].clientY - touchStartY.current;
 
-    // Detect horizontal swipe
     if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3) {
       if (deltaX < 0) {
         goToNextPage();
@@ -124,29 +124,40 @@ export const FlipbookViewer: React.FC = () => {
     setItemNotes('');
   };
 
-  const currentPage = pages[currentPageIndex] || pages[0];
+  const currentPage = pages[currentPageIndex] || pages[0] || {
+    id: 'cover',
+    pageNumber: 1,
+    title: activeRestaurant.name || 'Menu',
+    layout: 'cover' as const,
+    items: []
+  };
 
-  // Group pages for bookmark tabs (exclude cover)
-  const categoryTabs = pages
+  // Extract category pages for bottom pill navigation (Ref: The Corner Table)
+  const categoryPages = pages
     .map((p, idx) => ({ ...p, pageIndex: idx }))
     .filter(p => p.layout !== 'cover');
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-[#121110] text-neutral-100 flex flex-col justify-between py-2 sm:py-4 px-2 sm:px-6 relative select-none overflow-x-hidden">
-      {/* Top Header Bar */}
-      <div className="max-w-2xl mx-auto w-full flex items-center justify-between text-xs px-2 mb-2 text-neutral-400">
+    <div 
+      className="min-h-[calc(100vh-3.5rem)] text-neutral-100 flex flex-col justify-between py-2 sm:py-4 px-2 sm:px-6 relative select-none overflow-x-hidden"
+      style={{
+        background: `radial-gradient(ellipse at 50% 30%, ${coverThemeColor}55 0%, #111412 85%, #0a0c0b 100%)`
+      }}
+    >
+      {/* Top Subtle Status Bar */}
+      <div className="max-w-xl mx-auto w-full flex items-center justify-between text-xs px-2 mb-1.5 text-neutral-400">
         <div className="flex items-center gap-2 truncate">
-          <span className="font-serif font-bold text-amber-200 truncate tracking-wide">
-            {currentPage.layout === 'cover' ? 'Menu Cover' : currentPage.title}
+          <span className="font-serif font-bold text-amber-200/90 truncate tracking-wide">
+            {currentPage.layout === 'cover' ? activeRestaurant.name : currentPage.title}
           </span>
           <span className="text-neutral-600">·</span>
           <span className="font-mono text-[11px] text-amber-400/90 font-bold">
-            Page {currentPageIndex + 1} of {pages.length}
+            {currentPageIndex + 1} / {pages.length}
           </span>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
-          {/* Sound toggle */}
+        <div className="flex items-center gap-2.5 shrink-0">
+          {/* Sound Toggle */}
           <button
             onClick={() => setIsAudioEnabled(!isAudioEnabled)}
             className="p-1 text-neutral-400 hover:text-amber-400 transition-colors"
@@ -155,18 +166,17 @@ export const FlipbookViewer: React.FC = () => {
             {isAudioEnabled ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4 text-neutral-600" />}
           </button>
 
-          {/* Contents trigger */}
+          {/* Quick List Switcher */}
           <button
-            onClick={() => setContentsOpen(true)}
-            className="flex items-center gap-1.5 text-[11px] font-bold text-amber-200 hover:text-white bg-neutral-900/90 border border-amber-600/30 px-2.5 py-1 rounded-lg transition-colors shadow-sm"
+            onClick={() => setCurrentView('quick_menu')}
+            className="text-[11px] font-semibold text-neutral-300 hover:text-amber-300 px-2 py-0.5 rounded-md hover:bg-white/5 transition-colors"
           >
-            <BookMarked className="w-3.5 h-3.5 text-amber-400" />
-            <span>Index</span>
+            Quick List &rarr;
           </button>
         </div>
       </div>
 
-      {/* Main Authentic Book Spread Presentation */}
+      {/* Main Authentic Book Spread (Matching The Corner Table & Open Brochure) */}
       <div 
         className="flex-1 flex items-center justify-center my-auto w-full relative py-1"
         onTouchStart={handleTouchStart}
@@ -176,7 +186,7 @@ export const FlipbookViewer: React.FC = () => {
         <button
           onClick={goToPrevPage}
           disabled={currentPageIndex === 0 || isFlipping}
-          className={`hidden md:flex items-center justify-center w-11 h-11 rounded-full bg-neutral-900/90 hover:bg-neutral-800 text-amber-300 border border-amber-600/30 shadow-2xl transition-all mr-4 shrink-0 ${
+          className={`hidden md:flex items-center justify-center w-11 h-11 rounded-full bg-neutral-900/80 hover:bg-neutral-800 text-amber-300 border border-amber-600/30 shadow-2xl transition-all mr-4 shrink-0 ${
             currentPageIndex === 0 ? 'opacity-20 cursor-not-allowed' : 'opacity-85 hover:opacity-100 hover:scale-105'
           }`}
           aria-label="Previous Page"
@@ -185,54 +195,51 @@ export const FlipbookViewer: React.FC = () => {
         </button>
 
         {/* ========================================================================= */}
-        {/* THE PHYSICAL LUXURY RESTAURANT BOOK FOLIO */}
+        {/* PHYSICAL LEATHER-BOUND RESTAURANT MENU BOOK */}
         {/* ========================================================================= */}
-        <div className="relative flex items-center">
-          {/* Outer Leather Folio Casing with Stitched Seam */}
+        <div className="relative">
+          {/* Outer Leather Folio Casing with Stacked Paper Edge Depth */}
           <div 
-            className="relative p-2.5 sm:p-4 rounded-[26px] sm:rounded-[34px] shadow-2xl"
+            className="relative p-2 sm:p-3 rounded-[24px] sm:rounded-[32px] transition-transform duration-300"
             style={{
-              backgroundColor: '#1c1714',
-              backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(60, 45, 35, 0.4) 0%, rgba(20, 16, 14, 0.95) 100%)',
-              border: '2px solid rgba(217, 119, 6, 0.35)',
-              boxShadow: '0 25px 60px -15px rgba(0,0,0,0.9), inset 0 0 35px rgba(0,0,0,0.8)'
+              backgroundColor: coverThemeColor,
+              backgroundImage: 'radial-gradient(circle at 50% 40%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.5) 100%)',
+              border: '2px solid rgba(212, 175, 55, 0.45)',
+              boxShadow: '0 25px 65px -15px rgba(0,0,0,0.85), inset 0 0 35px rgba(0,0,0,0.7)'
             }}
           >
-            {/* Brass Corner Brackets */}
-            <div className="absolute top-2 left-2 w-6 h-6 border-t-2 border-l-2 border-amber-500/80 rounded-tl-xl pointer-events-none z-30" />
-            <div className="absolute top-2 right-2 w-6 h-6 border-t-2 border-r-2 border-amber-500/80 rounded-tr-xl pointer-events-none z-30" />
-            <div className="absolute bottom-2 left-2 w-6 h-6 border-b-2 border-l-2 border-amber-500/80 rounded-bl-xl pointer-events-none z-30" />
-            <div className="absolute bottom-2 right-2 w-6 h-6 border-b-2 border-r-2 border-amber-500/80 rounded-br-xl pointer-events-none z-30" />
-
-            {/* Inner Gold Foil Filigree Trim */}
-            <div className="absolute inset-1.5 sm:inset-2.5 border border-amber-500/20 rounded-[20px] sm:rounded-[26px] pointer-events-none z-30" />
-
-            {/* Book Spine Crease & Binding Stitch on Left Edge */}
+            {/* Book Spine on the Left */}
             <div 
-              className="absolute top-4 bottom-4 left-2.5 sm:left-4 w-4 z-30 pointer-events-none rounded-l-md"
+              className="absolute top-3 bottom-3 left-2 sm:left-3 w-5 z-30 pointer-events-none rounded-l-md"
               style={{
-                background: 'linear-gradient(to right, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.2) 60%, transparent 100%)'
+                background: 'linear-gradient(to right, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 60%, transparent 100%)'
               }}
             />
 
-            {/* Paper Stack Edge Depth Effect on the Right Edge */}
+            {/* Brass Corner Braces in 4 corners */}
+            <div className="absolute top-2.5 left-2.5 w-6 h-6 border-t-2 border-l-2 border-[#D4AF37] rounded-tl-lg pointer-events-none z-30" />
+            <div className="absolute top-2.5 right-2.5 w-6 h-6 border-t-2 border-r-2 border-[#D4AF37] rounded-tr-lg pointer-events-none z-30" />
+            <div className="absolute bottom-2.5 left-2.5 w-6 h-6 border-b-2 border-l-2 border-[#D4AF37] rounded-bl-lg pointer-events-none z-30" />
+            <div className="absolute bottom-2.5 right-2.5 w-6 h-6 border-b-2 border-r-2 border-[#D4AF37] rounded-br-lg pointer-events-none z-30" />
+
+            {/* Layered Paper Stack Edge (Bottom & Right) to give true 3D book thickness */}
             <div 
-              className="w-full max-w-md sm:max-w-lg h-[540px] xs:h-[590px] sm:h-[640px] relative rounded-2xl overflow-hidden bg-white"
+              className="w-full max-w-sm xs:max-w-md sm:max-w-lg h-[520px] xs:h-[570px] sm:h-[620px] relative rounded-2xl overflow-hidden bg-[#FAF7F2]"
               style={{
-                boxShadow: '2px 0 0 #f0ece1, 4px 0 0 #e6dfcf, 6px 0 0 #ded6c2, 10px 5px 25px rgba(0,0,0,0.45)',
+                boxShadow: '2px 2px 0 #ede8db, 4px 4px 0 #e0d9c8, 6px 6px 0 #d5ccb8, 12px 14px 28px rgba(0,0,0,0.55)',
                 perspective: '1600px',
                 transformStyle: 'preserve-3d'
               }}
             >
-              {/* Spine Gutter Shadow overlay down the left side of every page */}
+              {/* Spine Gutter Shadow overlay down the left side */}
               <div 
                 className="absolute top-0 bottom-0 left-0 w-8 z-20 pointer-events-none"
                 style={{
-                  background: 'linear-gradient(to right, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.06) 60%, transparent 100%)'
+                  background: 'linear-gradient(to right, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.05) 60%, transparent 100%)'
                 }}
               />
 
-              {/* 3D Flipping Page Container */}
+              {/* 3D Turning Page Leaf Container */}
               <div 
                 className={`w-full h-full transition-transform duration-300 ease-out origin-left ${
                   isFlipping
@@ -259,7 +266,7 @@ export const FlipbookViewer: React.FC = () => {
                 />
               </div>
 
-              {/* Dynamic Page Turn Dynamic Light / Shadow Sheen */}
+              {/* Dynamic Page Turn Lighting Sheen */}
               {isFlipping && (
                 <div
                   className={`absolute inset-0 pointer-events-none transition-opacity duration-300 z-20 ${
@@ -278,7 +285,7 @@ export const FlipbookViewer: React.FC = () => {
                   title="Turn to next page"
                 >
                   <div 
-                    className="absolute bottom-0 right-0 w-0 h-0 border-solid border-t-[28px] border-r-[28px] border-t-amber-400/30 border-r-transparent group-hover:border-t-amber-400/60 transition-all drop-shadow"
+                    className="absolute bottom-0 right-0 w-0 h-0 border-solid border-t-[28px] border-r-[28px] border-t-amber-400/35 border-r-transparent group-hover:border-t-amber-400/70 transition-all drop-shadow"
                     style={{ transform: 'rotate(180deg)' }}
                   />
                   <div className="absolute bottom-1 right-1 text-[8px] font-bold text-amber-900/60 pointer-events-none">
@@ -300,37 +307,13 @@ export const FlipbookViewer: React.FC = () => {
               />
             </div>
           </div>
-
-          {/* Bookmark Category Tabs protruding from the right edge */}
-          <div className="hidden lg:flex flex-col gap-2 ml-1 z-10">
-            {categoryTabs.map(tab => {
-              const isActive = currentPageIndex === tab.pageIndex;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => jumpToPage(tab.pageIndex)}
-                  className={`px-3 py-2 rounded-r-xl text-[11px] font-bold tracking-tight text-left transition-all border-y border-r shadow-md flex items-center gap-1.5 ${
-                    isActive
-                      ? 'bg-amber-500 text-neutral-950 border-amber-300 translate-x-1 font-extrabold shadow-lg'
-                      : 'bg-neutral-900/90 text-amber-200/80 hover:text-white hover:bg-neutral-800 border-amber-600/30'
-                  }`}
-                  style={{
-                    boxShadow: isActive ? '3px 3px 10px rgba(217, 119, 6, 0.4)' : undefined
-                  }}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                  <span className="truncate max-w-[90px]">{tab.title}</span>
-                </button>
-              );
-            })}
-          </div>
         </div>
 
         {/* Navigation Arrow Right (Desktop) */}
         <button
           onClick={goToNextPage}
           disabled={currentPageIndex >= pages.length - 1 || isFlipping}
-          className={`hidden md:flex items-center justify-center w-11 h-11 rounded-full bg-neutral-900/90 hover:bg-neutral-800 text-amber-300 border border-amber-600/30 shadow-2xl transition-all ml-4 shrink-0 ${
+          className={`hidden md:flex items-center justify-center w-11 h-11 rounded-full bg-neutral-900/80 hover:bg-neutral-800 text-amber-300 border border-amber-600/30 shadow-2xl transition-all ml-4 shrink-0 ${
             currentPageIndex >= pages.length - 1 ? 'opacity-20 cursor-not-allowed' : 'opacity-85 hover:opacity-100 hover:scale-105'
           }`}
           aria-label="Next Page"
@@ -339,60 +322,65 @@ export const FlipbookViewer: React.FC = () => {
         </button>
       </div>
 
-      {/* Floating Bottom Ergonomic Navigation Bar */}
-      <div className="max-w-md sm:max-w-lg mx-auto w-full pt-2 pb-1">
-        <div className="bg-neutral-900/95 backdrop-blur-md rounded-2xl p-2 px-3 border border-amber-600/30 flex items-center justify-between gap-3 shadow-2xl">
-          {/* Prev Button */}
+      {/* ========================================================================= */}
+      {/* FLOATING PILL NAVIGATION BAR (Exact replica of The Corner Table reference!) */}
+      {/* ========================================================================= */}
+      <div className="max-w-xl mx-auto w-full pt-2 pb-1">
+        <div className="bg-[#121614]/95 backdrop-blur-md rounded-full py-2 px-3 sm:px-4 border border-[#D4AF37]/35 flex items-center justify-between gap-1 sm:gap-2 shadow-2xl text-xs overflow-x-auto">
+          {/* < Prev */}
           <button
             onClick={goToPrevPage}
             disabled={currentPageIndex === 0}
-            className="p-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-amber-300 disabled:opacity-25 transition-colors"
-            title="Previous page"
+            className="flex items-center gap-1 font-bold text-neutral-300 hover:text-[#D4AF37] disabled:opacity-30 transition-colors whitespace-nowrap px-1.5 py-1"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <span>&lsaquo; Prev</span>
           </button>
 
-          {/* Page Dots & Title */}
-          <div className="flex-1 text-center truncate">
-            <div className="flex items-center justify-center gap-1.5 mb-1">
-              {pages.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => jumpToPage(idx)}
-                  className={`h-1.5 rounded-full transition-all ${
-                    idx === currentPageIndex 
-                      ? 'w-5 bg-amber-400 shadow-sm' 
-                      : 'w-1.5 bg-neutral-700 hover:bg-neutral-500'
-                  }`}
-                  aria-label={`Go to page ${idx + 1}`}
-                />
-              ))}
-            </div>
-            <div className="text-[11px] font-semibold text-neutral-300 truncate">
-              {currentPage.layout === 'cover' ? 'Welcome Cover' : currentPage.title}
-            </div>
-          </div>
+          {/* Contents Index Modal Trigger */}
+          <button
+            onClick={() => setContentsOpen(true)}
+            className="font-bold text-amber-200 hover:text-white transition-colors whitespace-nowrap px-2 py-1"
+          >
+            Contents
+          </button>
 
-          {/* Next Button */}
+          {/* Category Pills (Breakfast, Drinks, Dessert, etc.) */}
+          {categoryPages.slice(0, 4).map(cat => {
+            const isActive = currentPageIndex === cat.pageIndex;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => jumpToPage(cat.pageIndex)}
+                className={`font-semibold whitespace-nowrap px-2 py-1 rounded-full transition-all text-[11px] sm:text-xs ${
+                  isActive
+                    ? 'bg-[#D4AF37] text-neutral-950 font-bold shadow-md'
+                    : 'text-neutral-300 hover:text-white'
+                }`}
+              >
+                {cat.title}
+              </button>
+            );
+          })}
+
+          {/* Next > */}
           <button
             onClick={goToNextPage}
             disabled={currentPageIndex >= pages.length - 1}
-            className="p-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-amber-300 disabled:opacity-25 transition-colors"
-            title="Next page"
+            className="flex items-center gap-1 font-bold text-neutral-300 hover:text-[#D4AF37] disabled:opacity-30 transition-colors whitespace-nowrap px-1.5 py-1"
           >
-            <ChevronRight className="w-4 h-4" />
+            <span>Next &rsaquo;</span>
           </button>
         </div>
       </div>
 
-      {/* Table of Contents Drawer */}
+      {/* Full Contents Drawer Modal */}
       {contentsOpen && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#1c1714] border border-amber-600/40 rounded-3xl max-w-sm w-full p-5 shadow-2xl">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#151c18] border border-[#D4AF37]/45 rounded-3xl max-w-sm w-full p-5 shadow-2xl">
             <div className="flex items-center justify-between pb-3 border-b border-neutral-800 mb-3">
               <div className="flex items-center gap-2">
-                <BookMarked className="w-4 h-4 text-amber-400" />
-                <h3 className="text-sm font-bold text-amber-200">Menu Book Index</h3>
+                <BookMarked className="w-4 h-4 text-[#D4AF37]" />
+                <h3 className="text-sm font-bold text-amber-200">Table of Contents</h3>
               </div>
               <button 
                 onClick={() => setContentsOpen(false)}
@@ -409,7 +397,7 @@ export const FlipbookViewer: React.FC = () => {
                   onClick={() => jumpToPage(idx)}
                   className={`w-full p-2.5 text-left rounded-xl border transition-all flex items-center justify-between ${
                     idx === currentPageIndex
-                      ? 'border-amber-500 bg-amber-500/20 text-amber-200 font-bold'
+                      ? 'border-[#D4AF37] bg-[#D4AF37]/20 text-amber-200 font-bold'
                       : 'border-neutral-800 hover:border-neutral-700 bg-neutral-900/60 text-neutral-300'
                   }`}
                 >
@@ -432,9 +420,9 @@ export const FlipbookViewer: React.FC = () => {
                   setContentsOpen(false);
                   setCurrentView('quick_menu');
                 }}
-                className="text-amber-400 hover:underline text-[11px] font-bold"
+                className="text-[#D4AF37] hover:underline text-[11px] font-bold"
               >
-                Switch to Quick List View &rarr;
+                Switch to Quick List &rarr;
               </button>
               <button
                 onClick={() => setContentsOpen(false)}
@@ -450,7 +438,7 @@ export const FlipbookViewer: React.FC = () => {
       {/* Dish Customization Modal */}
       {selectedItem && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-neutral-900 border border-neutral-700 rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl">
+          <div className="bg-[#1c1917] border border-amber-600/40 rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl">
             {selectedItem.imageUrl && (
               <div className="w-full h-44 relative overflow-hidden bg-neutral-950">
                 <img 
@@ -466,7 +454,7 @@ export const FlipbookViewer: React.FC = () => {
                   <X className="w-3.5 h-3.5" />
                 </button>
                 {selectedItem.badge && (
-                  <span className="absolute bottom-2.5 left-3 px-2 py-0.5 bg-amber-500 text-neutral-950 font-bold text-[10px] rounded shadow">
+                  <span className="absolute bottom-2.5 left-3 px-2 py-0.5 bg-[#D4AF37] text-neutral-950 font-bold text-[10px] rounded shadow">
                     {selectedItem.badge}
                   </span>
                 )}
@@ -492,20 +480,6 @@ export const FlipbookViewer: React.FC = () => {
               <p className="text-xs text-neutral-400 leading-relaxed mb-3">
                 {selectedItem.description}
               </p>
-
-              {/* Badges / Prep Time / Allergens */}
-              <div className="flex flex-wrap items-center gap-2 mb-4 text-[11px]">
-                {selectedItem.prepTime && (
-                  <span className="flex items-center gap-1 text-neutral-400 bg-neutral-800 px-2 py-0.5 rounded-md">
-                    <Clock className="w-3 h-3 text-amber-400" /> {selectedItem.prepTime}
-                  </span>
-                )}
-                {selectedItem.allergens && selectedItem.allergens.length > 0 && (
-                  <span className="flex items-center gap-1 text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md">
-                    <AlertCircle className="w-3 h-3 text-amber-400" /> Allergens: {selectedItem.allergens.join(', ')}
-                  </span>
-                )}
-              </div>
 
               {/* Kitchen Notes */}
               <div className="mb-4">
@@ -543,7 +517,7 @@ export const FlipbookViewer: React.FC = () => {
 
                 <button
                   onClick={handleAddItemToCart}
-                  className="flex-1 py-2.5 px-3 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow"
+                  className="flex-1 py-2.5 px-3 bg-[#D4AF37] hover:bg-[#e6c148] text-neutral-950 font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>

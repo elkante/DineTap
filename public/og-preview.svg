@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#163e30" />
+      <stop offset="100%" stop-color="#0a1712" />
+    </radialGradient>
+    <linearGradient id="goldText" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFF5C0" />
+      <stop offset="50%" stop-color="#D4AF37" />
+      <stop offset="100%" stop-color="#997516" />
+    </linearGradient>
+    <linearGradient id="bookCover" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#103628" />
+      <stop offset="100%" stop-color="#071b14" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="25" stdDeviation="30" flood-color="#000000" flood-opacity="0.8" />
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bgGlow)" />
+
+  <!-- Left Side: Copy -->
+  <g transform="translate(100, 140)">
+    <!-- Brand Pill -->
+    <rect width="190" height="38" rx="19" fill="#D4AF37" fill-opacity="0.15" stroke="#D4AF37" stroke-width="1.5" />
+    <text x="95" y="24" fill="#D4AF37" font-family="'Cinzel', serif" font-weight="700" font-size="13" letter-spacing="3" text-anchor="middle">DINETAP SAAS</text>
+
+    <!-- Main Headline -->
+    <text x="0" y="110" fill="#FFFFFF" font-family="'Playfair Display', serif" font-weight="800" font-size="52" letter-spacing="-1">
+      Luxury Digital
+    </text>
+    <text x="0" y="175" fill="url(#goldText)" font-family="'Playfair Display', serif" font-weight="800" font-size="52" letter-spacing="-1">
+      Menu Books.
+    </text>
+
+    <!-- Subtitle -->
+    <text x="0" y="240" fill="#A7B9B1" font-family="'Plus Jakarta Sans', sans-serif" font-weight="400" font-size="20">
+      Contactless NTAG213 NFC tap &amp; table QR ordering.
+    </text>
+    <text x="0" y="275" fill="#A7B9B1" font-family="'Plus Jakarta Sans', sans-serif" font-weight="400" font-size="20">
+      Zero 3rd-party fee withholding &middot; Live Kitchen KDS.
+    </text>
+
+    <!-- URL -->
+    <g transform="translate(0, 340)">
+      <rect width="240" height="52" rx="16" fill="#D4AF37" />
+      <text x="120" y="32" fill="#0C2E22" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="16" text-anchor="middle">Explore DineTap &rarr;</text>
+    </g>
+  </g>
+
+  <!-- Right Side: Luxury Realistic Book Illustration -->
+  <g transform="translate(720, 70)" filter="url(#shadow)">
+    <!-- Paper Edge Depth -->
+    <rect x="18" y="12" width="360" height="490" rx="20" fill="#EAE3D2" />
+    <rect x="12" y="8" width="360" height="490" rx="20" fill="#F4EFE6" />
+
+    <!-- Leather Book Cover -->
+    <rect x="0" y="0" width="360" height="490" rx="22" fill="url(#bookCover)" stroke="#05120D" stroke-width="3" />
+
+    <!-- Stitched Perimeter -->
+    <rect x="18" y="18" width="324" height="454" rx="14" fill="none" stroke="#D4AF37" stroke-width="2" stroke-dasharray="6 4" opacity="0.65" />
+
+    <!-- Brass Corner Braces -->
+    <path d="M22 42 L22 22 L42 22" fill="none" stroke="#D4AF37" stroke-width="3" />
+    <path d="M338 42 L338 22 L318 22" fill="none" stroke="#D4AF37" stroke-width="3" />
+    <path d="M22 448 L22 468 L42 468" fill="none" stroke="#D4AF37" stroke-width="3" />
+    <path d="M338 448 L338 468 L318 468" fill="none" stroke="#D4AF37" stroke-width="3" />
+
+    <!-- Spine Shadow -->
+    <rect x="0" y="0" width="28" height="490" rx="22" fill="black" fill-opacity="0.35" />
+
+    <!-- Crest Emblem -->
+    <g transform="translate(180, 110)">
+      <path d="M0 -35 L28 -18 L28 15 C28 35 0 48 0 48 C0 48 -28 35 -28 15 L-28 -18 Z" fill="#0C2E22" stroke="#D4AF37" stroke-width="2.5" />
+      <path d="M0 -22 L0 32 M-18 5 L18 5" stroke="#D4AF37" stroke-width="2" stroke-linecap="round" />
+      <circle cx="0" cy="5" r="3" fill="#D4AF37" />
+    </g>
+
+    <!-- Book Title & Subtitle -->
+    <text x="180" y="215" fill="url(#goldText)" font-family="'Playfair Display', serif" font-weight="700" font-size="30" letter-spacing="0" text-anchor="middle">
+      The Corner Table
+    </text>
+    <text x="180" y="245" fill="#D4AF37" font-family="'Cinzel', serif" font-weight="600" font-size="12" letter-spacing="6" opacity="0.9" text-anchor="middle">
+      KITCHEN &amp; BAR
+    </text>
+
+    <!-- Divider Line -->
+    <line x1="120" y1="270" x2="240" y2="270" stroke="#D4AF37" stroke-width="1" opacity="0.5" />
+
+    <!-- Tap or Swipe to Open -->
+    <text x="180" y="380" fill="#D4AF37" font-family="'Plus Jakarta Sans', sans-serif" font-weight="700" font-size="11" letter-spacing="4" opacity="0.8" text-anchor="middle">
+      TAP OR SWIPE TO OPEN
+    </text>
+  </g>
+</svg>

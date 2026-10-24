@@ -127,23 +127,14 @@ function mapDbRowToRestaurant(rRow: any, itemRows: any[] = []): RestaurantTenant
       });
     });
   } else {
-    // Default starter page if no dishes exist yet
+    // Empty starter page ready for dishes (NO mock dishes)
     pages.push({
       id: `p-${rRow.id}-2`,
       pageNumber: 2,
-      title: 'Specialities',
-      subtitle: 'Prepared fresh to order',
+      title: 'Menu',
+      subtitle: 'Dishes prepared fresh to order',
       layout: 'chef_specials',
-      items: [
-        {
-          id: `it-${rRow.id}-default`,
-          name: 'Signature House Dish',
-          description: 'Crafted with fresh ingredients and house seasoning.',
-          price: 4500,
-          badge: 'Chef Special',
-          prepTime: '15 min'
-        }
-      ]
+      items: []
     });
   }
 
@@ -160,13 +151,16 @@ function mapDbRowToRestaurant(rRow: any, itemRows: any[] = []): RestaurantTenant
     urlPayload: `${origin}/?r=${rRow.slug}&table=Table+${num}`
   }));
 
+  const coverColor = rRow.cover_color || rRow.primary_color || '#0c2e22';
+  const accentColor = rRow.accent_color || '#d4af37';
+
   return {
     id: rRow.id,
     slug: rRow.slug,
     name: rRow.name,
-    tagline: rRow.tagline || 'Modern Dine-in & Quick Table Ordering',
-    logo: rRow.logo || '🍽️',
-    coverImage: rRow.cover_image || '/src/assets/images/dish_jollof_chicken_1792837966503.jpg',
+    tagline: rRow.tagline || 'Kitchen & Bar',
+    logo: rRow.logo || '🛡️',
+    coverImage: rRow.cover_image || '',
     address: rRow.address || '',
     phone: rRow.phone || '',
     openingHours: rRow.opening_hours || '10:00 AM - 10:00 PM',
@@ -176,14 +170,15 @@ function mapDbRowToRestaurant(rRow: any, itemRows: any[] = []): RestaurantTenant
     allowOrdering: true,
     tableOrderingEnabled: true,
     design: {
-      templateId: 'nigerian',
-      paperTexture: 'parchment',
-      fontStyle: 'retro_bistro',
-      primaryColor: '#7C2D12',
-      accentColor: '#D97706',
-      textColor: '#292524',
-      secondaryTextColor: '#78716C',
-      borderColor: '#E7E5E4',
+      templateId: 'emerald_gold',
+      paperTexture: 'emerald_leather',
+      fontStyle: 'serif_luxury',
+      primaryColor: coverColor,
+      accentColor: accentColor,
+      coverColor: coverColor,
+      textColor: '#1c1917',
+      secondaryTextColor: '#78716c',
+      borderColor: '#e7e5e4',
       showPageNumbers: true,
       enableAudioEffect: true,
       showPriceSymbols: true,
@@ -246,6 +241,7 @@ export async function registerRestaurant(data: {
   currency?: string;
   tagline?: string;
   logo?: string;
+  coverColor?: string;
 }): Promise<{ success: boolean; restaurant?: RestaurantTenant; error?: string }> {
   const cleanSlug = data.slug.toLowerCase().trim().replace(/[^a-z0-9-]+/g, '-').replace(/(^-|-$)/g, '');
   
@@ -255,6 +251,7 @@ export async function registerRestaurant(data: {
 
   const newId = `rest-${Date.now()}`;
   let ownerId = `usr-${Date.now()}`;
+  const coverColor = data.coverColor || '#0c2e22';
 
   // 1. Try Supabase Auth
   if (supabase && data.password && data.email) {
@@ -280,8 +277,8 @@ export async function registerRestaurant(data: {
           owner_id: ownerId,
           name: data.name.trim(),
           slug: cleanSlug,
-          tagline: data.tagline?.trim() || 'Fresh flavours and signature dishes',
-          logo: data.logo || '🍽️',
+          tagline: data.tagline?.trim() || 'Kitchen & Bar',
+          logo: data.logo || '🛡️',
           currency: data.currency || '₦',
         }
       ]);
@@ -292,35 +289,22 @@ export async function registerRestaurant(data: {
           return { success: false, error: `The menu link "/?r=${cleanSlug}" is already taken. Please choose another slug.` };
         }
         console.warn('Supabase restaurant insert notice:', insErr.message);
-      } else {
-        // Insert initial starter dish
-        await supabase.from('menu_items').insert([
-          {
-            id: `it-${newId}-1`,
-            restaurant_id: newId,
-            category: 'Specialities',
-            name: `${data.name} Special`,
-            description: 'Chef signature dish prepared fresh with quality ingredients.',
-            price: 4500,
-            badge: 'Chef Special',
-            is_sold_out: false
-          }
-        ]);
       }
     } catch (e: any) {
       console.warn('Supabase register error:', e);
     }
   }
 
-  // 3. Build local model
+  // 3. Build local model (NO mock dishes)
   const newRestaurant = mapDbRowToRestaurant({
     id: newId,
     name: data.name.trim(),
     slug: cleanSlug,
-    tagline: data.tagline?.trim() || 'Fresh flavours and signature dishes',
-    logo: data.logo || '🍽️',
+    tagline: data.tagline?.trim() || 'Kitchen & Bar',
+    logo: data.logo || '🛡️',
     currency: data.currency || '₦',
-  });
+    cover_color: coverColor,
+  }, []);
 
   // Save to local cache
   const stored = getStoredRestaurants().filter(r => r.slug !== cleanSlug);

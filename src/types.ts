@@ -1,4 +1,10 @@
 export type MenuTemplateId = 
+  | 'emerald_gold'
+  | 'burgundy_gold'
+  | 'navy_gold'
+  | 'espresso_amber'
+  | 'charcoal_brass'
+  | 'warm_terracotta'
   | 'nigerian'
   | 'luxury'
   | 'fast_food'
@@ -14,7 +20,17 @@ export type PageLayoutType =
   | 'drinks_beverage'
   | 'chef_specials';
 
-export type PaperTexture = 'parchment' | 'dark_slate' | 'clean_cardstock' | 'warm_kraft' | 'classic_linen';
+export type PaperTexture = 
+  | 'emerald_leather'
+  | 'leather_burgundy'
+  | 'leather_navy'
+  | 'leather_espresso'
+  | 'leather_charcoal'
+  | 'parchment' 
+  | 'dark_slate' 
+  | 'clean_cardstock' 
+  | 'warm_kraft' 
+  | 'classic_linen';
 
 export type FontStyle = 'serif_luxury' | 'modern_sans' | 'bold_punchy' | 'retro_bistro';
 
@@ -24,6 +40,7 @@ export interface MenuBookDesign {
   fontStyle: FontStyle;
   primaryColor: string;
   accentColor: string;
+  coverColor?: string;
   textColor: string;
   secondaryTextColor: string;
   borderColor: string;

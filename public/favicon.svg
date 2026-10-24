@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Rounded Base Plate -->
+  <rect width="128" height="128" rx="28" fill="#0C2E22"/>
+  <!-- Gold Stitched Perimeter -->
+  <rect x="8" y="8" width="112" height="112" rx="22" stroke="#D4AF37" stroke-width="2" stroke-dasharray="4 3" opacity="0.6"/>
+  <!-- Luxury Crest Shield -->
+  <path d="M64 24 L96 40 L96 74 C96 94 64 108 64 108 C64 108 32 94 32 74 L32 40 Z" stroke="#D4AF37" stroke-width="3" fill="#092219"/>
+  <!-- Inner Cross & Star -->
+  <path d="M64 36 L64 92 M44 64 L84 64" stroke="#D4AF37" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="64" cy="64" r="5" fill="#D4AF37"/>
+  <!-- Corner Gold Accents -->
+  <circle cx="16" cy="16" r="2.5" fill="#D4AF37" opacity="0.8"/>
+  <circle cx="112" cy="16" r="2.5" fill="#D4AF37" opacity="0.8"/>
+  <circle cx="16" cy="112" r="2.5" fill="#D4AF37" opacity="0.8"/>
+  <circle cx="112" cy="112" r="2.5" fill="#D4AF37" opacity="0.8"/>
+</svg>
