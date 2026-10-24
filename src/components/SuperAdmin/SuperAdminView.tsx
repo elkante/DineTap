@@ -9,6 +9,12 @@ import {
   registerRestaurant 
 } from '../../utils/supabase';
 import { 
+  getStoredPlans, 
+  saveStoredPlans, 
+  resetPlansToDefault, 
+  PlanTier 
+} from '../../utils/pricingConfig';
+import { 
   ShieldCheck, 
   Building2, 
   Users, 
@@ -29,7 +35,9 @@ import {
   PhoneCall, 
   Clock,
   Sparkles,
-  Eye
+  Eye,
+  Save,
+  RotateCcw
 } from 'lucide-react';
 
 const ADMIN_MASTER_PIN = 'dinetap2026';
@@ -49,7 +57,11 @@ export const SuperAdminView: React.FC = () => {
   const [tenants, setTenants] = useState<RestaurantTenant[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'restaurants' | 'revenue' | 'hardware'>('restaurants');
+  const [activeTab, setActiveTab] = useState<'restaurants' | 'plans' | 'hardware'>('restaurants');
+
+  // Live Subscription Plans
+  const [plans, setPlans] = useState<PlanTier[]>(() => getStoredPlans());
+  const [hasPlanChanges, setHasPlanChanges] = useState(false);
 
   // Modal: Onboard new restaurant
   const [isOnboardModalOpen, setIsOnboardModalOpen] = useState(false);
@@ -57,7 +69,7 @@ export const SuperAdminView: React.FC = () => {
   const [newSlug, setNewSlug] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('pass1234');
-  const [newPlan, setNewPlan] = useState<'Starter' | 'Growth' | 'Enterprise'>('Growth');
+  const [newPlan, setNewPlan] = useState<'Basic' | 'Standard' | 'Premium' | 'Enterprise'>('Standard');
 
   const loadAllTenants = async () => {
     setLoading(true);
@@ -156,12 +168,38 @@ export const SuperAdminView: React.FC = () => {
   const totalDishes = tenants.reduce((acc, t) => 
     acc + t.pages.reduce((pAcc, p) => pAcc + p.items.length, 0), 0
   );
-  // Estimated MRR based on plans
+  // Dynamic plan pricing references
+  const basicPrice = plans.find(p => p.id === 'basic')?.monthlyPrice || 8000;
+  const standardPrice = plans.find(p => p.id === 'standard')?.monthlyPrice || 19000;
+  const premiumPrice = plans.find(p => p.id === 'premium')?.monthlyPrice || 30000;
+  const enterprisePrice = plans.find(p => p.id === 'enterprise')?.monthlyPrice || 70000;
+
+  // Estimated MRR based on dynamically configured plans
   const estimatedMrr = tenants.reduce((acc, t) => {
-    if (t.plan?.includes('Enterprise')) return acc + 90000;
-    if (t.plan?.includes('Growth')) return acc + 50000;
-    return acc + 25000; // Starter
+    const pl = (t.plan || '').toLowerCase();
+    if (pl.includes('enterprise')) return acc + enterprisePrice;
+    if (pl.includes('premium')) return acc + premiumPrice;
+    if (pl.includes('standard') || pl.includes('growth')) return acc + standardPrice;
+    return acc + basicPrice;
   }, 0);
+
+  const handleUpdatePlan = (planId: string, updates: Partial<PlanTier>) => {
+    setPlans(prev => prev.map(p => p.id === planId ? { ...p, ...updates } : p));
+    setHasPlanChanges(true);
+  };
+
+  const handleSavePlans = () => {
+    saveStoredPlans(plans);
+    setHasPlanChanges(false);
+    showNotification('🎉 Public Pricing Plans saved! Updates live across the platform.');
+  };
+
+  const handleResetPlans = () => {
+    const defaults = resetPlansToDefault();
+    setPlans(defaults);
+    setHasPlanChanges(false);
+    showNotification('Reset pricing plans to platform defaults.');
+  };
 
   // If locked, render Master PIN access screen
   if (!isUnlocked) {
@@ -328,6 +366,20 @@ export const SuperAdminView: React.FC = () => {
             All Registered Restaurants ({totalRestaurants})
           </button>
           <button
+            onClick={() => setActiveTab('plans')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${
+              activeTab === 'plans'
+                ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+            }`}
+          >
+            <CreditCard className="w-3.5 h-3.5" />
+            <span>Subscription Plans & Pricing (Editable)</span>
+            {hasPlanChanges && (
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+            )}
+          </button>
+          <button
             onClick={() => setActiveTab('hardware')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
               activeTab === 'hardware'
@@ -336,16 +388,6 @@ export const SuperAdminView: React.FC = () => {
             }`}
           >
             Table Cards & Stands Fulfillment
-          </button>
-          <button
-            onClick={() => setActiveTab('revenue')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
-              activeTab === 'revenue'
-                ? 'bg-amber-500 text-neutral-950 shadow-sm'
-                : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
-            }`}
-          >
-            Pricing & Subscriptions Architecture
           </button>
         </div>
 
@@ -398,7 +440,13 @@ export const SuperAdminView: React.FC = () => {
                         <tr key={t.id} className="hover:bg-neutral-800/40 transition-colors">
                           <td className="py-3.5 px-4">
                             <div className="flex items-center gap-2.5">
-                              <span className="text-xl p-1 bg-neutral-800 rounded-lg">{t.logo || '🛡️'}</span>
+                              <div className="w-8 h-8 rounded-lg bg-neutral-800 border border-neutral-700 overflow-hidden flex items-center justify-center shrink-0">
+                                {t.logo && (t.logo.startsWith('data:') || t.logo.startsWith('http') || t.logo.startsWith('/')) ? (
+                                  <img src={t.logo} alt={t.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <span className="text-base">{t.logo || '🛡️'}</span>
+                                )}
+                              </div>
                               <div>
                                 <div className="font-bold text-white text-sm">{t.name}</div>
                                 <div className="text-[11px] text-neutral-400">{t.tagline || 'Kitchen & Bar'}</div>
@@ -524,52 +572,150 @@ export const SuperAdminView: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 3: PRICING ARCHITECTURE */}
-        {activeTab === 'revenue' && (
+        {/* TAB 3: SUBSCRIPTION PLANS & PRICING EDITOR */}
+        {activeTab === 'plans' && (
           <div className="space-y-6">
             <div className="bg-neutral-900 rounded-2xl border border-neutral-800 p-6">
-              <h3 className="text-base font-bold text-white mb-2">SaaS Pricing Architecture (Nigeria)</h3>
-              <p className="text-xs text-neutral-400 max-w-2xl leading-relaxed mb-6">
-                Recurring revenue tiers displayed on the public <a href="/?page=pricing" className="text-amber-400 underline">Pricing Page</a>:
-              </p>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="p-5 bg-neutral-950 rounded-2xl border border-neutral-800">
-                  <div className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">Starter Tier</div>
-                  <div className="text-2xl font-mono font-extrabold text-white mb-2">₦25,000 <span className="text-xs text-neutral-400 font-normal">/ mo</span></div>
-                  <ul className="text-xs text-neutral-300 space-y-2 mt-4">
-                    <li>&bull; Up to 10 tables</li>
-                    <li>&bull; Realistic 3D Leather Flipbook</li>
-                    <li>&bull; Unlimited dishes & device photos</li>
-                    <li>&bull; Table waiter buzzer</li>
-                    <li>&bull; 0% commission on orders</li>
-                  </ul>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <CreditCard className="w-5 h-5 text-amber-400" />
+                    <span>Live Subscription Plans & Table Limits (Nigeria)</span>
+                  </h3>
+                  <p className="text-xs text-neutral-400 mt-1">
+                    Edit monthly rates, annual rates, and table allocations. Changes reflect on the public <a href="/?page=pricing" target="_blank" rel="noreferrer" className="text-amber-400 underline">Pricing Page</a> immediately.
+                  </p>
                 </div>
 
-                <div className="p-5 bg-neutral-950 rounded-2xl border-2 border-amber-500/60">
-                  <div className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-1">Growth Tier (Best Seller)</div>
-                  <div className="text-2xl font-mono font-extrabold text-amber-400 mb-2">₦50,000 <span className="text-xs text-neutral-400 font-normal">/ mo</span></div>
-                  <ul className="text-xs text-neutral-300 space-y-2 mt-4">
-                    <li>&bull; Up to 30 tables</li>
-                    <li>&bull; Live Kitchen Display System (KDS)</li>
-                    <li>&bull; Custom signature leather colors</li>
-                    <li>&bull; Real-time "Sold Out" toggling</li>
-                    <li>&bull; Priority 24/7 WhatsApp support</li>
-                  </ul>
-                </div>
-
-                <div className="p-5 bg-neutral-950 rounded-2xl border border-neutral-800">
-                  <div className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">Enterprise VIP Tier</div>
-                  <div className="text-2xl font-mono font-extrabold text-white mb-2">₦90,000 <span className="text-xs text-neutral-400 font-normal">/ mo</span></div>
-                  <ul className="text-xs text-neutral-300 space-y-2 mt-4">
-                    <li>&bull; Unlimited tables</li>
-                    <li>&bull; Multi-branch & multi-kitchen</li>
-                    <li>&bull; Custom domain branding</li>
-                    <li>&bull; First 15 table stands free</li>
-                    <li>&bull; Dedicated account manager</li>
-                  </ul>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={handleResetPlans}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-xl text-xs font-semibold transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset Defaults</span>
+                  </button>
+                  <button
+                    onClick={handleSavePlans}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold rounded-xl text-xs transition-colors shadow-md"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Save Pricing Changes</span>
+                  </button>
                 </div>
               </div>
+
+              {/* 4 Editable Plan Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {plans.map((p) => (
+                  <div
+                    key={p.id}
+                    className={`p-4 rounded-2xl border flex flex-col justify-between ${
+                      p.id === 'standard'
+                        ? 'bg-neutral-950/90 border-amber-500/60 shadow-lg'
+                        : 'bg-neutral-950 border-neutral-800'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="font-serif font-bold text-sm text-white">{p.name}</span>
+                        {p.badge && (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30">
+                            {p.badge}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Monthly Rate Input */}
+                      <div className="mb-3">
+                        <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                          Monthly Price (₦)
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono text-neutral-500 text-xs font-bold">₦</span>
+                          <input
+                            type="number"
+                            step={500}
+                            value={p.monthlyPrice}
+                            onChange={(e) => handleUpdatePlan(p.id, { monthlyPrice: Number(e.target.value) })}
+                            className="w-full pl-7 pr-3 py-1.5 bg-neutral-900 border border-neutral-700 rounded-xl text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-400"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Annual Rate Input */}
+                      <div className="mb-3">
+                        <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                          Annual Price (₦)
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono text-neutral-500 text-xs font-bold">₦</span>
+                          <input
+                            type="number"
+                            step={5000}
+                            value={p.annualPrice}
+                            onChange={(e) => handleUpdatePlan(p.id, { annualPrice: Number(e.target.value) })}
+                            className="w-full pl-7 pr-3 py-1.5 bg-neutral-900 border border-neutral-700 rounded-xl text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-400"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Max Tables Input */}
+                      <div className="mb-3">
+                        <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                          Max Tables Allocation
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={0}
+                            value={p.maxTables ?? 0}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              handleUpdatePlan(p.id, { maxTables: val <= 0 ? null : val });
+                            }}
+                            disabled={p.id === 'enterprise'}
+                            placeholder="Unlimited"
+                            className="w-full px-3 py-1.5 bg-neutral-900 border border-neutral-700 rounded-xl text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-400 disabled:opacity-50"
+                          />
+                          <span className="text-[11px] text-neutral-400 shrink-0 font-medium">
+                            {p.maxTables ? 'Tables' : 'Unlimited'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Subtitle / Tagline */}
+                      <div className="mb-3">
+                        <label className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                          Target Audience Tagline
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={p.tagline}
+                          onChange={(e) => handleUpdatePlan(p.id, { tagline: e.target.value })}
+                          className="w-full px-2.5 py-1.5 bg-neutral-900 border border-neutral-700 rounded-xl text-[11px] text-neutral-300 focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-neutral-800 text-[10px] text-neutral-400">
+                      ✓ {p.features.length} core features included
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {hasPlanChanges && (
+                <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between text-xs text-amber-300">
+                  <span>You have unsaved pricing modifications!</span>
+                  <button
+                    onClick={handleSavePlans}
+                    className="px-3 py-1 bg-amber-500 text-neutral-950 font-bold rounded-lg"
+                  >
+                    Save Changes Now
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -620,9 +766,10 @@ export const SuperAdminView: React.FC = () => {
                     onChange={(e) => setNewPlan(e.target.value as any)}
                     className="w-full px-3 py-2.5 bg-neutral-800 border border-neutral-700 rounded-xl text-white focus:outline-none"
                   >
-                    <option value="Starter">Starter (₦25k/mo)</option>
-                    <option value="Growth">Growth (₦50k/mo)</option>
-                    <option value="Enterprise">Enterprise (₦90k/mo)</option>
+                    <option value="Basic">Basic (10 tables - ₦8k/mo)</option>
+                    <option value="Standard">Standard (20 tables - ₦19k/mo)</option>
+                    <option value="Premium">Premium (60 tables - ₦30k/mo)</option>
+                    <option value="Enterprise">Enterprise (Unlimited - ₦70k/mo)</option>
                   </select>
                 </div>
 

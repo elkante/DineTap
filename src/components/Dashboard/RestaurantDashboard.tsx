@@ -26,6 +26,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { FoodItem } from '../../types';
+import { getDishFallbackImage } from '../Flipbook/FlipPageRenderer';
 
 export const RestaurantDashboard: React.FC = () => {
   const { 
@@ -42,12 +43,21 @@ export const RestaurantDashboard: React.FC = () => {
     bulkGenerateTables,
     deleteTable,
     updateRestaurantMeta,
+    updatePage,
+    deletePage,
     showNotification 
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'kds' | 'menu' | 'tables' | 'settings'>('kds');
   const [copiedSlug, setCopiedSlug] = useState(false);
   const [tableQrMap, setTableQrMap] = useState<Record<string, string>>({});
+
+  // Category filter & management
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
+  const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
+  const [newCategoryTitle, setNewCategoryTitle] = useState('');
+  const [editingCategory, setEditingCategory] = useState<{ id: string; title: string } | null>(null);
+  const [editingCategoryTitle, setEditingCategoryTitle] = useState('');
 
   // Menu item modal
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
@@ -59,6 +69,7 @@ export const RestaurantDashboard: React.FC = () => {
   const [newItemPrepTime, setNewItemPrepTime] = useState('15 min');
   const [newItemImage, setNewItemImage] = useState<string>('');
   const [newItemCategory, setNewItemCategory] = useState<string>('');
+  const [isCustomCategoryInput, setIsCustomCategoryInput] = useState(false);
 
   // Add Table state
   const [newTableNumber, setNewTableNumber] = useState('');
@@ -128,6 +139,84 @@ export const RestaurantDashboard: React.FC = () => {
     }
   };
 
+  const contentPages = activeRestaurant.pages.filter(p => p.layout !== 'cover');
+
+  const handleCreateCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanTitle = newCategoryTitle.trim();
+    if (!cleanTitle) return;
+
+    if (contentPages.some(p => p.title.toLowerCase() === cleanTitle.toLowerCase())) {
+      showNotification(`Category "${cleanTitle}" already exists!`);
+      return;
+    }
+
+    const newPageNum = activeRestaurant.pages.length + 1;
+    const newPage = {
+      id: `p-${Date.now()}`,
+      pageNumber: newPageNum,
+      title: cleanTitle,
+      subtitle: `${cleanTitle} prepared fresh to order`,
+      layout: 'two_column_grid' as const,
+      items: []
+    };
+
+    updateRestaurantMeta({
+      pages: [...activeRestaurant.pages, newPage]
+    });
+    setNewCategoryTitle('');
+    setIsAddCategoryOpen(false);
+    setSelectedCategoryFilter(newPage.id);
+    showNotification(`🎉 Category "${cleanTitle}" added to menu!`);
+  };
+
+  const handleUpdateCategoryTitle = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCategory || !editingCategoryTitle.trim()) return;
+
+    updatePage(editingCategory.id, { title: editingCategoryTitle.trim() });
+    showNotification(`Renamed section to "${editingCategoryTitle.trim()}"`);
+    setEditingCategory(null);
+  };
+
+  const handleDeleteCategory = (pageId: string, title: string) => {
+    const page = activeRestaurant.pages.find(p => p.id === pageId);
+    if (!page) return;
+
+    if (page.items.length > 0) {
+      if (!window.confirm(`Category "${title}" contains ${page.items.length} dish(es). Deleting it will remove these dishes. Continue?`)) {
+        return;
+      }
+    }
+
+    if (contentPages.length <= 1) {
+      showNotification('Your menu must have at least one category!');
+      return;
+    }
+
+    deletePage(pageId);
+    if (selectedCategoryFilter === pageId) {
+      setSelectedCategoryFilter('all');
+    }
+    showNotification(`Removed section "${title}"`);
+  };
+
+  const handleQuickDishPhotoUpload = async (dish: FoodItem & { pageId: string; pageTitle?: string }, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      updateFoodItem(dish.pageId, dish.id, { imageUrl: dataUrl });
+      saveDishToSupabase(activeRestaurant.id, {
+        ...dish,
+        imageUrl: dataUrl
+      }, dish.pageTitle || 'Specialities');
+      showNotification(`Photo attached to "${dish.name}"!`);
+    } catch {
+      showNotification('Failed to read image file');
+    }
+  };
+
   const handleOpenAddDish = () => {
     setEditingDish(null);
     setNewItemName('');
@@ -136,8 +225,9 @@ export const RestaurantDashboard: React.FC = () => {
     setNewItemBadge('');
     setNewItemPrepTime('15 min');
     setNewItemImage('');
-    const firstContentPage = activeRestaurant.pages.find(p => p.layout !== 'cover');
+    const firstContentPage = contentPages[0];
     setNewItemCategory(firstContentPage?.title || 'Specialities');
+    setIsCustomCategoryInput(false);
     setIsAddItemOpen(true);
   };
 
@@ -150,12 +240,15 @@ export const RestaurantDashboard: React.FC = () => {
     setNewItemPrepTime(dish.prepTime || '15 min');
     setNewItemImage(dish.imageUrl || '');
     setNewItemCategory(dish.pageTitle || 'Specialities');
+    setIsCustomCategoryInput(false);
     setIsAddItemOpen(true);
   };
 
   const handleSaveDish = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItemName.trim()) return;
+
+    const chosenCat = newItemCategory.trim() || 'Specialities';
 
     const dishPayload = {
       name: newItemName.trim(),
@@ -166,31 +259,56 @@ export const RestaurantDashboard: React.FC = () => {
       imageUrl: newItemImage || undefined,
     };
 
+    // Check if category page exists, create if not
+    let targetPage = activeRestaurant.pages.find(p => p.layout !== 'cover' && p.title.toLowerCase() === chosenCat.toLowerCase());
+    let targetPageId = targetPage?.id;
+
+    if (!targetPage) {
+      targetPageId = `p-${Date.now()}`;
+      const newPage = {
+        id: targetPageId,
+        pageNumber: activeRestaurant.pages.length + 1,
+        title: chosenCat,
+        subtitle: `${chosenCat} prepared fresh to order`,
+        layout: 'two_column_grid' as const,
+        items: []
+      };
+      updateRestaurantMeta({
+        pages: [...activeRestaurant.pages, newPage]
+      });
+    }
+
     if (editingDish) {
-      // Update existing dish
-      updateFoodItem(editingDish.pageId, editingDish.id, dishPayload);
+      // If moved to a different category
+      if (targetPageId && targetPageId !== editingDish.pageId) {
+        deleteFoodItem(editingDish.pageId, editingDish.id);
+        addFoodItem(targetPageId, {
+          ...dishPayload,
+          isSoldOut: editingDish.isSoldOut,
+          allergens: editingDish.allergens,
+        });
+      } else {
+        updateFoodItem(editingDish.pageId, editingDish.id, dishPayload);
+      }
+
       saveDishToSupabase(activeRestaurant.id, {
         id: editingDish.id,
         isSoldOut: editingDish.isSoldOut,
         allergens: editingDish.allergens,
         ...dishPayload,
-      }, newItemCategory || editingDish.pageTitle || 'Specialities');
+      }, chosenCat);
       showNotification(`Updated "${dishPayload.name}"!`);
     } else {
       // Add new dish
-      let targetPage = activeRestaurant.pages.find(p => p.layout !== 'cover' && p.title.toLowerCase() === newItemCategory.toLowerCase());
-      if (!targetPage) {
-        targetPage = activeRestaurant.pages.find(p => p.layout !== 'cover') || activeRestaurant.pages[0];
-      }
-      if (!targetPage) return;
-
       const newDishId = `it-${Date.now()}`;
-      addFoodItem(targetPage.id, dishPayload);
+      if (targetPageId) {
+        addFoodItem(targetPageId, dishPayload);
+      }
       saveDishToSupabase(activeRestaurant.id, {
         id: newDishId,
         ...dishPayload,
-      }, targetPage.title);
-      showNotification(`Added "${dishPayload.name}" to menu!`);
+      }, chosenCat);
+      showNotification(`Added "${dishPayload.name}" to ${chosenCat}!`);
     }
 
     setIsAddItemOpen(false);
@@ -225,8 +343,12 @@ export const RestaurantDashboard: React.FC = () => {
       <header className="bg-neutral-900 text-white sticky top-0 z-40 border-b border-neutral-800">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="text-2xl p-1 bg-neutral-800 rounded-xl shrink-0">
-              {activeRestaurant.logo}
+            <div className="w-10 h-10 rounded-xl bg-neutral-800 border border-neutral-700/80 flex items-center justify-center overflow-hidden shrink-0">
+              {activeRestaurant.logo && (activeRestaurant.logo.startsWith('data:') || activeRestaurant.logo.startsWith('http') || activeRestaurant.logo.startsWith('/')) ? (
+                <img src={activeRestaurant.logo} alt={activeRestaurant.name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-2xl">{activeRestaurant.logo || '🍽️'}</span>
+              )}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -376,15 +498,9 @@ export const RestaurantDashboard: React.FC = () => {
                 <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto">
                   When diners scan any of your table QR stand cards, tickets appear here in real time with an audio alert.
                 </p>
-                <div className="mt-4">
-                  <a
-                    href={`${origin}/?r=${activeRestaurant.slug}&table=Table+1`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
-                  >
-                    <span>Open Table 1 Menu &rarr;</span>
-                  </a>
+                <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 text-emerald-800 text-xs font-semibold border border-emerald-200">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Listening for incoming diner orders</span>
                 </div>
               </div>
             ) : (
@@ -518,122 +634,220 @@ export const RestaurantDashboard: React.FC = () => {
         {/* ========================================================= */}
         {activeTab === 'menu' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h2 className="text-base font-extrabold text-neutral-900">Menu Dishes</h2>
+                <h2 className="text-base font-extrabold text-neutral-900">Menu Dishes & Sections</h2>
                 <p className="text-xs text-neutral-500">
-                  Add your restaurant's dishes, adjust prices, or mark items sold out in real-time.
+                  Organize dishes into menu sections, attach mouthwatering photos, adjust prices, or toggle sold out.
                 </p>
               </div>
 
-              <button
-                onClick={handleOpenAddDish}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
-              >
-                <Plus className="w-4 h-4 text-amber-400" />
-                <span>Add New Dish</span>
-              </button>
-            </div>
-
-            {allDishes.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-neutral-200 p-8 text-center">
-                <Utensils className="w-8 h-8 text-neutral-300 mx-auto mb-2" />
-                <h3 className="font-bold text-neutral-900 text-sm mb-1">No dishes added yet</h3>
-                <p className="text-xs text-neutral-500 mb-4">Add your signature dishes with photos and prices to build your digital menu book.</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsAddCategoryOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-xl text-xs font-bold transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5 text-amber-600" />
+                  <span>+ New Category</span>
+                </button>
                 <button
                   onClick={handleOpenAddDish}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-white text-xs font-bold rounded-xl"
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
                 >
                   <Plus className="w-4 h-4 text-amber-400" />
-                  <span>Add First Dish</span>
+                  <span>Add Dish</span>
                 </button>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {allDishes.map(dish => (
-                  <div
-                    key={dish.id}
-                    className={`bg-white rounded-2xl border p-3 sm:p-4 shadow-xs flex items-center justify-between gap-3 ${
-                      dish.isSoldOut ? 'opacity-65 border-red-200 bg-red-50/20' : 'border-neutral-200'
-                    }`}
-                  >
-                    {/* Dish Thumbnail */}
-                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-neutral-100 border border-neutral-200 overflow-hidden shrink-0 flex items-center justify-center relative shadow-xs">
-                      {dish.imageUrl ? (
-                        <img src={dish.imageUrl} alt={dish.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <Utensils className="w-5 h-5 text-neutral-300" />
-                      )}
-                      {dish.isSoldOut && (
-                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                          <span className="text-[8px] font-bold text-white bg-red-600 px-1 py-0.5 rounded">SOLD</span>
+            </div>
+
+            {/* Category Filter & Manager Strip */}
+            <div className="bg-white rounded-2xl border border-neutral-200 p-3 shadow-xs">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+                  Menu Sections ({contentPages.length})
+                </span>
+                <span className="text-[10px] text-neutral-400">
+                  Click a section to filter dishes or edit its name
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar text-xs">
+                <button
+                  onClick={() => setSelectedCategoryFilter('all')}
+                  className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-colors ${
+                    selectedCategoryFilter === 'all'
+                      ? 'bg-neutral-900 text-white shadow-xs'
+                      : 'bg-neutral-100 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200'
+                  }`}
+                >
+                  All Dishes ({allDishes.length})
+                </button>
+
+                {contentPages.map(page => {
+                  const isSelected = selectedCategoryFilter === page.id;
+                  return (
+                    <div key={page.id} className="inline-flex items-center rounded-xl overflow-hidden shrink-0 border border-neutral-200">
+                      <button
+                        onClick={() => setSelectedCategoryFilter(page.id)}
+                        className={`px-3 py-1.5 font-bold whitespace-nowrap transition-colors ${
+                          isSelected
+                            ? 'bg-amber-500 text-neutral-950'
+                            : 'bg-neutral-50 text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100'
+                        }`}
+                      >
+                        {page.title} ({page.items.length})
+                      </button>
+                      {isSelected && (
+                        <div className="flex items-center bg-amber-600 px-1 py-1">
+                          <button
+                            onClick={() => { setEditingCategory({ id: page.id, title: page.title }); setEditingCategoryTitle(page.title); }}
+                            title="Rename Section"
+                            className="p-1 text-amber-950 hover:text-white"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCategory(page.id, page.title)}
+                            title="Delete Section"
+                            className="p-1 text-amber-950 hover:text-red-900"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
                         </div>
                       )}
                     </div>
+                  );
+                })}
+              </div>
+            </div>
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <h3 className="font-bold text-neutral-900 text-sm truncate">{dish.name}</h3>
-                        {dish.isSoldOut ? (
-                          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-red-100 text-red-600 uppercase shrink-0">
-                            Sold Out
-                          </span>
-                        ) : dish.badge ? (
-                          <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 shrink-0">
-                            {dish.badge}
-                          </span>
-                        ) : null}
-                      </div>
+            {/* Dishes Grid */}
+            {(() => {
+              const displayDishes = allDishes.filter(d => 
+                selectedCategoryFilter === 'all' || d.pageId === selectedCategoryFilter
+              );
 
-                      <p className="text-xs text-neutral-500 line-clamp-1 mb-1.5">{dish.description || 'No description'}</p>
+              if (displayDishes.length === 0) {
+                return (
+                  <div className="bg-white rounded-2xl border border-neutral-200 p-8 text-center">
+                    <Utensils className="w-8 h-8 text-neutral-300 mx-auto mb-2" />
+                    <h3 className="font-bold text-neutral-900 text-sm mb-1">No dishes in this section</h3>
+                    <p className="text-xs text-neutral-500 mb-4">Add your dishes with photos and prices to build your digital menu book.</p>
+                    <button
+                      onClick={handleOpenAddDish}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-white text-xs font-bold rounded-xl"
+                    >
+                      <Plus className="w-4 h-4 text-amber-400" />
+                      <span>Add Dish to Section</span>
+                    </button>
+                  </div>
+                );
+              }
 
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="font-mono font-bold text-neutral-900">
-                          {design.currencySymbol}{dish.price.toLocaleString()}
-                        </span>
-                        <span className="text-[10px] px-2 py-0.5 bg-neutral-100 text-neutral-600 rounded-md font-medium">
-                          {dish.pageTitle}
-                        </span>
-                        {dish.prepTime && (
-                          <span className="text-[11px] text-neutral-400 flex items-center gap-0.5">
-                            <Clock className="w-3 h-3" /> {dish.prepTime}
-                          </span>
-                        )}
-                      </div>
-                    </div>
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {displayDishes.map(dish => {
+                    const dishImg = dish.imageUrl || getDishFallbackImage(dish.name, dish.pageTitle);
 
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => handleOpenEditDish(dish)}
-                        className="p-1.5 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"
-                        title="Edit dish & photo"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-
-                      <button
-                        onClick={() => toggleSoldOut(dish.pageId, dish.id)}
-                        className={`text-[11px] px-2 py-1.5 rounded-lg font-bold transition-colors ${
-                          dish.isSoldOut
-                            ? 'bg-amber-100 text-amber-900 hover:bg-amber-200'
-                            : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                    return (
+                      <div
+                        key={dish.id}
+                        className={`bg-white rounded-2xl border p-3 sm:p-4 shadow-xs flex items-center justify-between gap-3 ${
+                          dish.isSoldOut ? 'opacity-65 border-red-200 bg-red-50/20' : 'border-neutral-200'
                         }`}
                       >
-                        {dish.isSoldOut ? 'Restock' : 'Sold Out'}
-                      </button>
+                        {/* Dish Thumbnail & Quick Photo Trigger */}
+                        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-neutral-100 border border-neutral-200 overflow-hidden shrink-0 flex items-center justify-center relative shadow-xs group/thumb">
+                          <img src={dishImg} alt={dish.name} className="w-full h-full object-cover" />
+                          {dish.isSoldOut && (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                              <span className="text-[8px] font-bold text-white bg-red-600 px-1 py-0.5 rounded">SOLD</span>
+                            </div>
+                          )}
+                          <label
+                            className="absolute inset-0 bg-black/60 text-white flex flex-col items-center justify-center opacity-0 group-hover/thumb:opacity-100 cursor-pointer transition-opacity"
+                            title="Upload photo from device"
+                          >
+                            <Upload className="w-3.5 h-3.5 text-amber-300" />
+                            <span className="text-[8px] font-bold mt-0.5">Photo</span>
+                            <input type="file" accept="image/*" onChange={(e) => handleQuickDishPhotoUpload(dish, e)} className="hidden" />
+                          </label>
+                        </div>
 
-                      <button
-                        onClick={() => handleDeleteDish(dish.pageId, dish.id)}
-                        className="p-1.5 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete dish"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <h3 className="font-bold text-neutral-900 text-sm truncate">{dish.name}</h3>
+                            {dish.isSoldOut ? (
+                              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-red-100 text-red-600 uppercase shrink-0">
+                                Sold Out
+                              </span>
+                            ) : dish.badge ? (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 shrink-0">
+                                {dish.badge}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <p className="text-xs text-neutral-500 line-clamp-1 mb-1.5">{dish.description || 'No description'}</p>
+
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="font-mono font-bold text-neutral-900">
+                              {design.currencySymbol}{dish.price.toLocaleString()}
+                            </span>
+                            <span className="text-[10px] px-2 py-0.5 bg-neutral-100 text-neutral-600 rounded-md font-medium truncate max-w-[110px]">
+                              {dish.pageTitle}
+                            </span>
+                            {dish.prepTime && (
+                              <span className="text-[11px] text-neutral-400 flex items-center gap-0.5">
+                                <Clock className="w-3 h-3" /> {dish.prepTime}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          {/* Quick Photo Upload Button */}
+                          <label
+                            className="p-1.5 text-neutral-400 hover:text-amber-800 hover:bg-amber-50 rounded-lg cursor-pointer transition-colors"
+                            title="Attach dish photo from camera roll"
+                          >
+                            <ImageIcon className="w-3.5 h-3.5" />
+                            <input type="file" accept="image/*" onChange={(e) => handleQuickDishPhotoUpload(dish, e)} className="hidden" />
+                          </label>
+
+                          <button
+                            onClick={() => handleOpenEditDish(dish)}
+                            className="p-1.5 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"
+                            title="Edit dish"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            onClick={() => toggleSoldOut(dish.pageId, dish.id)}
+                            className={`text-[11px] px-2 py-1.5 rounded-lg font-bold transition-colors ${
+                              dish.isSoldOut
+                                ? 'bg-amber-100 text-amber-900 hover:bg-amber-200'
+                                : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                            }`}
+                          >
+                            {dish.isSoldOut ? 'Restock' : 'Sold Out'}
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteDish(dish.pageId, dish.id)}
+                            className="p-1.5 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete dish"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -947,25 +1161,61 @@ export const RestaurantDashboard: React.FC = () => {
               {/* Category Selector */}
               <div>
                 <label className="block font-bold text-neutral-700 mb-1">Menu Section / Category *</label>
-                <input
-                  type="text"
-                  required
-                  value={newItemCategory}
-                  onChange={(e) => setNewItemCategory(e.target.value)}
-                  placeholder="e.g. Mains, Starters, Drinks, Grill, Desserts"
-                  className="w-full px-3 py-2 border border-neutral-200 rounded-xl focus:outline-none focus:border-neutral-900 text-xs"
-                  list="category-suggestions"
-                />
-                <datalist id="category-suggestions">
-                  {activeRestaurant.pages
-                    .filter(p => p.layout !== 'cover')
-                    .map(p => (
-                      <option key={p.id} value={p.title} />
-                    ))}
-                </datalist>
-                <div className="text-[10px] text-neutral-400 mt-0.5">
-                  Dishes are grouped into book pages by category.
-                </div>
+                {!isCustomCategoryInput ? (
+                  <div className="space-y-1.5">
+                    <select
+                      value={newItemCategory}
+                      onChange={(e) => {
+                        if (e.target.value === '__add_new__') {
+                          setIsCustomCategoryInput(true);
+                          setNewItemCategory('');
+                        } else {
+                          setNewItemCategory(e.target.value);
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-neutral-200 rounded-xl focus:outline-none focus:border-neutral-900 text-xs font-semibold bg-white"
+                    >
+                      {contentPages.map(p => (
+                        <option key={p.id} value={p.title}>{p.title}</option>
+                      ))}
+                      <option value="__add_new__">✨ + Create New Section / Category...</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => { setIsCustomCategoryInput(true); setNewItemCategory(''); }}
+                      className="text-[11px] text-amber-700 font-bold hover:underline inline-block"
+                    >
+                      + Create a new section
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        required
+                        autoFocus
+                        value={newItemCategory}
+                        onChange={(e) => setNewItemCategory(e.target.value)}
+                        placeholder="e.g. Cocktails, Desserts, Suya & Grill, Sides"
+                        className="flex-1 px-3 py-2 border border-amber-400 bg-amber-50/40 rounded-xl focus:outline-none focus:border-neutral-900 text-xs font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCustomCategoryInput(false);
+                          setNewItemCategory(contentPages[0]?.title || 'Specialities');
+                        }}
+                        className="px-2.5 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-600 rounded-xl text-xs font-bold shrink-0"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <div className="text-[10px] text-amber-800 font-medium">
+                      This will automatically create a new section in your 3D flipbook menu!
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-2">
@@ -1034,6 +1284,89 @@ export const RestaurantDashboard: React.FC = () => {
                   className="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-xl shadow-xs text-xs transition-colors"
                 >
                   {editingDish ? 'Update Dish' : 'Save Dish'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Modal: Create New Category */}
+      {isAddCategoryOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-neutral-200 text-xs">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-bold text-neutral-900">Add New Menu Section</h3>
+              <button onClick={() => setIsAddCategoryOpen(false)} className="text-neutral-400 hover:text-neutral-700">✕</button>
+            </div>
+            <p className="text-[11px] text-neutral-500 mb-3">
+              Create a new category in your digital book (e.g. "Cocktails", "Sides", "Suya & Grills", "Desserts").
+            </p>
+            <form onSubmit={handleCreateCategory} className="space-y-3">
+              <div>
+                <label className="block font-bold text-neutral-700 mb-1">Section Title *</label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={newCategoryTitle}
+                  onChange={(e) => setNewCategoryTitle(e.target.value)}
+                  placeholder="e.g. Cocktails & Drinks"
+                  className="w-full px-3 py-2 border border-neutral-200 rounded-xl text-xs font-bold focus:outline-none focus:border-neutral-900"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-neutral-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddCategoryOpen(false)}
+                  className="px-3 py-1.5 text-neutral-600 rounded-lg text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-xl text-xs shadow-xs"
+                >
+                  Create Section
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Rename Category */}
+      {editingCategory && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-neutral-200 text-xs">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-bold text-neutral-900">Rename Menu Section</h3>
+              <button onClick={() => setEditingCategory(null)} className="text-neutral-400 hover:text-neutral-700">✕</button>
+            </div>
+            <form onSubmit={handleUpdateCategoryTitle} className="space-y-3">
+              <div>
+                <label className="block font-bold text-neutral-700 mb-1">Section Title *</label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={editingCategoryTitle}
+                  onChange={(e) => setEditingCategoryTitle(e.target.value)}
+                  className="w-full px-3 py-2 border border-neutral-200 rounded-xl text-xs font-bold focus:outline-none focus:border-neutral-900"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-neutral-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingCategory(null)}
+                  className="px-3 py-1.5 text-neutral-600 rounded-lg text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-xl text-xs shadow-xs"
+                >
+                  Save Title
                 </button>
               </div>
             </form>

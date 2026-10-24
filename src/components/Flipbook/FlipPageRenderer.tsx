@@ -2,6 +2,38 @@ import React from 'react';
 import { MenuBookPage, MenuBookDesign, FoodItem } from '../../types';
 import { Plus, Clock, AlertCircle } from 'lucide-react';
 
+export const getDishFallbackImage = (itemName: string, pageTitle?: string): string => {
+  const combined = `${itemName} ${pageTitle || ''}`.toLowerCase();
+  if (combined.includes('drink') || combined.includes('beverage') || combined.includes('cocktail') || combined.includes('wine') || combined.includes('juice') || combined.includes('beer') || combined.includes('tea') || combined.includes('coffee') || combined.includes('water')) {
+    return 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=400&q=80';
+  }
+  if (combined.includes('suya') || combined.includes('grill') || combined.includes('steak') || combined.includes('bbq') || combined.includes('barbecue') || combined.includes('meat') || combined.includes('ribs') || combined.includes('kebab') || combined.includes('chicken') || combined.includes('beef') || combined.includes('lamb')) {
+    return 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80';
+  }
+  if (combined.includes('rice') || combined.includes('jollof') || combined.includes('fried rice') || combined.includes('biryani') || combined.includes('platter')) {
+    return 'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?auto=format&fit=crop&w=400&q=80';
+  }
+  if (combined.includes('soup') || combined.includes('swallow') || combined.includes('egusi') || combined.includes('yam') || combined.includes('stew') || combined.includes('curry') || combined.includes('pepper soup')) {
+    return 'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=400&q=80';
+  }
+  if (combined.includes('salad') || combined.includes('starter') || combined.includes('appetizer') || combined.includes('spring roll') || combined.includes('wing') || combined.includes('snack')) {
+    return 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=400&q=80';
+  }
+  if (combined.includes('dessert') || combined.includes('cake') || combined.includes('sweet') || combined.includes('ice cream') || combined.includes('waffle') || combined.includes('pastry')) {
+    return 'https://images.unsplash.com/photo-1551024601-bec78aea704b?auto=format&fit=crop&w=400&q=80';
+  }
+  if (combined.includes('burger') || combined.includes('sandwich') || combined.includes('shawarma') || combined.includes('wrap') || combined.includes('fries')) {
+    return 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=400&q=80';
+  }
+  if (combined.includes('fish') || combined.includes('seafood') || combined.includes('prawn') || combined.includes('shrimp') || combined.includes('salmon')) {
+    return 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=400&q=80';
+  }
+  if (combined.includes('pasta') || combined.includes('spaghetti') || combined.includes('noodle')) {
+    return 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=400&q=80';
+  }
+  return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=400&q=80';
+};
+
 interface FlipPageRendererProps {
   page: MenuBookPage;
   design: MenuBookDesign;
@@ -222,24 +254,27 @@ export const FlipPageRenderer: React.FC<FlipPageRendererProps> = ({
                   : 'cursor-pointer hover:bg-stone-50/80 border-transparent hover:border-amber-200/80 active:scale-[0.995]'
               }`}
             >
-              {/* Optional Dish Thumbnail */}
-              {item.imageUrl && (
-                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg overflow-hidden shrink-0 bg-stone-200 relative shadow-xs">
-                  <img
-                    src={item.imageUrl}
-                    alt={item.name}
-                    referrerPolicy="no-referrer"
-                    className={`w-full h-full object-cover transition-transform duration-300 ${
-                      !item.isSoldOut ? 'group-hover:scale-105' : 'grayscale'
-                    }`}
-                  />
-                  {item.isSoldOut && (
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                      <span className="bg-red-600 text-white text-[8px] font-bold px-1 py-0.5 rounded uppercase">Sold</span>
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Dish Photo Thumbnail (Always Present for Authentic Luxury Menu) */}
+              {(() => {
+                const displayImage = item.imageUrl || getDishFallbackImage(item.name, page.title);
+                return (
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden shrink-0 bg-stone-200 relative shadow-xs border border-stone-200/80">
+                    <img
+                      src={displayImage}
+                      alt={item.name}
+                      referrerPolicy="no-referrer"
+                      className={`w-full h-full object-cover transition-transform duration-300 ${
+                        !item.isSoldOut ? 'group-hover:scale-105' : 'grayscale'
+                      }`}
+                    />
+                    {item.isSoldOut && (
+                      <div className="absolute inset-0 bg-black/55 flex items-center justify-center">
+                        <span className="bg-red-600 text-white text-[8px] font-bold px-1 py-0.5 rounded uppercase">Sold</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Dish info & Dot-Leader Price */}
               <div className="flex-1 min-w-0">
