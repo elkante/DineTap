@@ -1,5 +1,5 @@
 -- ========================================================
--- DineTap SaaS: Supabase Complete Database Schema
+-- DineTap SaaS: Idempotent Supabase Database Schema
 -- Paste and Run in Supabase SQL Editor:
 -- https://supabase.com/dashboard/project/ikkljurxmfwmhhumoiqo/sql
 -- ========================================================
@@ -64,25 +64,51 @@ CREATE TABLE IF NOT EXISTS public.waiter_calls (
     status TEXT DEFAULT 'active' CHECK (status IN ('active', 'resolved'))
 );
 
--- Enable RLS
+-- Enable Row Level Security (RLS)
 ALTER TABLE public.restaurants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.menu_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.waiter_calls ENABLE ROW LEVEL SECURITY;
 
--- Allow public reads and writes for anon (so customers can view menu and place table orders without logging in)
+-- Idempotent Security Policies (Drops existing before creating to prevent duplicate policy errors)
+DROP POLICY IF EXISTS "Public restaurants read" ON public.restaurants;
 CREATE POLICY "Public restaurants read" ON public.restaurants FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "Public restaurants write" ON public.restaurants;
 CREATE POLICY "Public restaurants write" ON public.restaurants FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Public menu items read" ON public.menu_items;
 CREATE POLICY "Public menu items read" ON public.menu_items FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "Public menu items write" ON public.menu_items;
 CREATE POLICY "Public menu items write" ON public.menu_items FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Public orders read" ON public.orders;
 CREATE POLICY "Public orders read" ON public.orders FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "Public orders insert" ON public.orders;
 CREATE POLICY "Public orders insert" ON public.orders FOR INSERT TO anon, authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public orders update" ON public.orders;
 CREATE POLICY "Public orders update" ON public.orders FOR UPDATE TO anon, authenticated USING (true);
 
+DROP POLICY IF EXISTS "Public waiter calls" ON public.waiter_calls;
 CREATE POLICY "Public waiter calls" ON public.waiter_calls FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- Enable Realtime for live Kitchen Display
-ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.waiter_calls;
+-- Safely Add Tables to Realtime Publication Only If Not Already Added
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'orders'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'waiter_calls'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.waiter_calls;
+  END IF;
+END $$;
