@@ -31,7 +31,7 @@ const COLOR_PRESETS = [
   { name: 'Charcoal Slate', hex: '#1f2421', border: '#d97706', label: 'Urban Bistro' },
 ];
 
-export const LandingPage: React.FC = () => {
+export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPricing }) => {
   const { showNotification } = useApp();
   const [authModal, setAuthModal] = useState<'signup' | 'login' | null>(null);
   const [loading, setLoading] = useState(false);
@@ -124,6 +124,12 @@ export const LandingPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 text-xs">
+            <button
+              onClick={() => onOpenPricing ? onOpenPricing() : (window.location.search = '?page=pricing')}
+              className="px-3 py-2 text-stone-700 hover:text-stone-950 font-bold transition-colors"
+            >
+              Pricing
+            </button>
             <button
               onClick={() => { setAuthModal('login'); setErrorMsg(null); }}
               className="px-4 py-2 text-stone-700 hover:text-stone-950 font-bold transition-colors"
@@ -326,13 +332,41 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-stone-200 py-10 bg-white text-center text-xs text-stone-500">
-        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2 font-serif font-bold text-stone-800">
-            <span className="w-6 h-6 rounded-lg bg-[#0c2e22] text-[#D4AF37] flex items-center justify-center text-xs">D</span>
-            <span>DineTap &middot; Luxury Restaurant Dining Platform</span>
+      <footer className="border-t border-stone-200 py-12 bg-white text-xs text-stone-500">
+        <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <div className="flex items-center gap-2 font-serif font-bold text-stone-900 text-sm">
+              <span className="w-7 h-7 rounded-lg bg-[#0c2e22] text-[#D4AF37] flex items-center justify-center text-xs shadow-sm">D</span>
+              <span>DineTap Nigeria</span>
+            </div>
+            <span className="hidden sm:inline text-stone-300">|</span>
+            <span className="text-stone-500 text-[11px]">Luxury 3D Digital Menus & NFC Standees</span>
           </div>
-          <div>&copy; {new Date().getFullYear()} DineTap. All rights reserved.</div>
+
+          <div className="flex flex-wrap items-center justify-center gap-6 text-xs font-semibold text-stone-600">
+            <button
+              onClick={() => onOpenPricing ? onOpenPricing() : (window.location.search = '?page=pricing')}
+              className="hover:text-amber-900 transition-colors"
+            >
+              Pricing Plans
+            </button>
+            <button
+              onClick={() => { setAuthModal('login'); setErrorMsg(null); }}
+              className="hover:text-amber-900 transition-colors"
+            >
+              Kitchen & Staff Sign In
+            </button>
+            <a
+              href="/?admin=true"
+              className="text-stone-400 hover:text-stone-800 transition-colors flex items-center gap-1"
+            >
+              <span>Platform Admin</span>
+            </a>
+          </div>
+
+          <div className="text-[11px] text-stone-400">
+            &copy; {new Date().getFullYear()} DineTap Inc. Lagos, Nigeria.
+          </div>
         </div>
       </footer>
 

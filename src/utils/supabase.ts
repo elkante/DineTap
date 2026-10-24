@@ -572,3 +572,62 @@ export async function deleteDishFromSupabase(itemId: string): Promise<void> {
     console.warn('Delete dish from Supabase error:', e);
   }
 }
+
+/**
+ * Fetch all registered restaurants from Supabase for Super Admin
+ */
+export async function fetchAllRestaurantsFromSupabase(): Promise<RestaurantTenant[]> {
+  if (supabase) {
+    try {
+      const { data: rRows, error: rErr } = await supabase
+        .from('restaurants')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (rRows && !rErr && rRows.length > 0) {
+        // Fetch all menu items
+        const { data: allItems } = await supabase.from('menu_items').select('*');
+        const itemsByRestId: Record<string, any[]> = {};
+        if (allItems) {
+          allItems.forEach(it => {
+            if (!itemsByRestId[it.restaurant_id]) itemsByRestId[it.restaurant_id] = [];
+            itemsByRestId[it.restaurant_id].push(it);
+          });
+        }
+
+        return rRows.map(r => mapDbRowToRestaurant(r, itemsByRestId[r.id] || []));
+      }
+    } catch (e) {
+      console.warn('Super Admin fetch all restaurants error:', e);
+    }
+  }
+  return getStoredRestaurants();
+}
+
+/**
+ * Update restaurant status in Supabase
+ */
+export async function updateRestaurantStatusInSupabase(restaurantId: string, status: 'active' | 'suspended'): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.from('restaurants').update({ status }).eq('id', restaurantId);
+  } catch (e) {
+    console.warn('Update restaurant status error:', e);
+  }
+}
+
+/**
+ * Delete restaurant completely from Supabase
+ */
+export async function deleteRestaurantFromSupabase(restaurantId: string): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.from('menu_items').delete().eq('restaurant_id', restaurantId);
+    await supabase.from('orders').delete().eq('restaurant_id', restaurantId);
+    await supabase.from('waiter_calls').delete().eq('restaurant_id', restaurantId);
+    await supabase.from('restaurants').delete().eq('id', restaurantId);
+  } catch (e) {
+    console.warn('Delete restaurant error:', e);
+  }
+}
+

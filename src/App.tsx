@@ -8,6 +8,8 @@ import { WaiterCallModal } from './components/WaiterCallModal';
 import { RestaurantDashboard } from './components/Dashboard/RestaurantDashboard';
 import { LandingPage } from './components/Landing/LandingPage';
 import { AuthPortal } from './components/Auth/AuthPortal';
+import { PricingPage } from './components/Pricing/PricingPage';
+import { SuperAdminView } from './components/SuperAdmin/SuperAdminView';
 import { FoodItem } from './types';
 import { Sparkles, Plus, Minus, X, AlertCircle, Store, ArrowRight } from 'lucide-react';
 
@@ -28,6 +30,42 @@ const MainContent: React.FC = () => {
   const [modalItem, setModalItem] = useState<FoodItem | null>(null);
   const [modalItemQty, setModalItemQty] = useState(1);
   const [modalItemNotes, setModalItemNotes] = useState('');
+
+  // Standalone page routing (?admin=true, ?page=pricing)
+  const [showPricing, setShowPricing] = useState(() => {
+    return new URLSearchParams(window.location.search).get('page') === 'pricing';
+  });
+  const [showAdmin, setShowAdmin] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('admin') === 'true' || params.get('page') === 'admin';
+  });
+
+  // Master Super Admin view route
+  if (showAdmin) {
+    return <SuperAdminView />;
+  }
+
+  // Dedicated Pricing Page route
+  if (showPricing) {
+    return (
+      <PricingPage
+        onBackToHome={() => {
+          setShowPricing(false);
+          if (window.location.search.includes('page=pricing')) {
+            window.history.pushState({}, '', window.location.pathname);
+          }
+        }}
+        onOpenSignup={() => {
+          setShowPricing(false);
+          window.history.pushState({}, '', window.location.pathname);
+        }}
+        onOpenLogin={() => {
+          setShowPricing(false);
+          window.history.pushState({}, '', window.location.pathname);
+        }}
+      />
+    );
+  }
 
   const handleOpenItem = (item: FoodItem) => {
     setModalItem(item);
@@ -91,7 +129,7 @@ const MainContent: React.FC = () => {
       );
     }
     // Owner is not logged in: show the high-converting SaaS Landing Page
-    return <LandingPage />;
+    return <LandingPage onOpenPricing={() => setShowPricing(true)} />;
   }
 
   // =========================================================================
