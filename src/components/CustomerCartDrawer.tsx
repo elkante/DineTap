@@ -256,7 +256,7 @@ export const CustomerCartDrawer: React.FC<{ isOpen: boolean; onClose: () => void
                   </div>
 
                   <p className="text-[10px] text-neutral-400 text-center">
-                    🔒 DineTap never holds your money. Payments are made directly to {activeRestaurant.name}.
+                    🔒 TapMenu never holds your money. Payments are made directly to {activeRestaurant.name}.
                   </p>
                 </div>
 

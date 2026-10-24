@@ -114,13 +114,13 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
             onClick={handleLogoTap}
             type="button"
             className="flex items-center gap-2 sm:gap-2.5 text-left focus:outline-none select-none active:scale-95 transition-transform"
-            title="DineTap"
+            title="TapMenu"
           >
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-[#0c2e22] text-[#D4AF37] flex items-center justify-center font-serif font-black text-base sm:text-xl shadow-md border border-[#D4AF37]/40 shrink-0">
-              D
+              T
             </div>
             <div className="min-w-0">
-              <span className="font-serif font-extrabold text-base sm:text-xl tracking-tight text-stone-900 block leading-tight">DineTap</span>
+              <span className="font-serif font-extrabold text-base sm:text-xl tracking-tight text-stone-900 block leading-tight">TapMenu</span>
               <span className="text-[9px] sm:text-[10px] block text-amber-800 font-mono uppercase tracking-wider font-bold truncate">Luxury Menus</span>
             </div>
           </button>
@@ -129,7 +129,7 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
           <div className="hidden md:flex items-center gap-6 text-xs font-bold text-stone-600">
             <a href="#hero" className="text-amber-900 border-b-2 border-amber-900 pb-0.5">Home</a>
             <button onClick={() => onOpenPricing ? onOpenPricing() : (window.location.search = '?page=pricing')} className="hover:text-amber-900 transition-colors">Pricing</button>
-            <a href="#features" className="hover:text-amber-900 transition-colors">Why DineTap</a>
+            <a href="#features" className="hover:text-amber-900 transition-colors">Why TapMenu</a>
             <button onClick={() => { setAuthModal('login'); setErrorMsg(null); }} className="hover:text-amber-900 transition-colors">Kitchen KDS</button>
           </div>
 
@@ -242,7 +242,7 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
       <section className="max-w-6xl mx-auto px-4 py-12 sm:py-16 border-t border-stone-200">
         <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-12">
           <h2 className="font-serif text-2xl sm:text-4xl font-bold text-stone-900">
-            Why Top Restaurants Choose DineTap
+            Why Top Restaurants Choose TapMenu
           </h2>
           <p className="text-xs sm:text-sm text-stone-500 mt-2">
             Built from the ground up for authentic hospitality, higher table turn rates, and total payment autonomy.
@@ -256,7 +256,7 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
             </div>
             <h3 className="font-serif text-lg font-bold text-stone-900 mb-1">Authentic Menu Book</h3>
             <p className="text-xs text-stone-600 leading-relaxed">
-              Not another clinical PDF or generic web form. DineTap provides a realistic luxury leather folio with 3D turning pages, debossed foil, and category tabs.
+              Not another clinical PDF or generic web form. TapMenu provides a realistic luxury leather folio with 3D turning pages, debossed foil, and category tabs.
             </p>
           </div>
 
@@ -291,8 +291,8 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
               type="button"
               className="flex items-center gap-2 font-serif font-bold text-stone-900 text-sm focus:outline-none select-none active:scale-95 transition-transform"
             >
-              <span className="w-7 h-7 rounded-lg bg-[#0c2e22] text-[#D4AF37] flex items-center justify-center text-xs shadow-sm font-serif font-black">D</span>
-              <span>DineTap Nigeria</span>
+              <span className="w-7 h-7 rounded-lg bg-[#0c2e22] text-[#D4AF37] flex items-center justify-center text-xs shadow-sm font-serif font-black">T</span>
+              <span>TapMenu Nigeria</span>
             </button>
             <span className="hidden sm:inline text-stone-300">|</span>
             <span className="text-stone-500 text-[11px]">Luxury 3D Digital Menus & Smart Tap Standees</span>
@@ -314,7 +314,7 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
           </div>
 
           <div className="text-[11px] text-stone-400">
-            &copy; {new Date().getFullYear()} DineTap Inc. Lagos, Nigeria.
+            &copy; {new Date().getFullYear()} TapMenu Inc. Lagos, Nigeria.
           </div>
         </div>
       </footer>
@@ -511,7 +511,7 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
 
       {/* Floating WhatsApp Quick Contact Button (matches screenshot) */}
       <a
-        href="https://wa.me/2348000000000?text=Hello%20DineTap%20Team!%20I'd%20like%20to%20learn%20more%20about%20digital%20menus%20for%20my%20restaurant."
+        href="https://wa.me/2348000000000?text=Hello%20TapMenu%20Team!%20I'd%20like%20to%20learn%20more%20about%20digital%20menus%20for%20my%20restaurant."
         target="_blank"
         rel="noopener noreferrer"
         className="fixed bottom-5 right-5 z-40 w-12 h-12 sm:w-14 sm:h-14 bg-[#25D366] hover:bg-[#20ba59] text-white rounded-full flex items-center justify-center shadow-2xl transition-all hover:scale-110 active:scale-95 border-2 border-white"

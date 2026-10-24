@@ -27,6 +27,7 @@ import {
   getStoredRestaurants,
   saveStoredRestaurants
 } from '../utils/supabase';
+import { getStoredPlans } from '../utils/pricingConfig';
 
 export type AppViewMode = 'flipbook' | 'quick_menu' | 'editor' | 'nfc_qr' | 'orders' | 'super_admin';
 
@@ -542,7 +543,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
+  // Helper to determine max tables allowed for a restaurant
+  const getTenantMaxTables = (r: RestaurantTenant): number | null => {
+    if (r.tableLimit !== undefined && r.tableLimit !== null) return r.tableLimit;
+    const plans = getStoredPlans();
+    const pl = (r.plan || 'basic').toLowerCase();
+    if (pl.includes('enterprise')) return null;
+    if (pl.includes('premium')) return plans.find(p => p.id === 'premium')?.maxTables ?? 60;
+    if (pl.includes('standard') || pl.includes('growth')) return plans.find(p => p.id === 'standard')?.maxTables ?? 20;
+    return plans.find(p => p.id === 'basic')?.maxTables ?? 10;
+  };
+
   const registerTableTag = (tableNumber: string, label: string, section: string, nfcSerial: string) => {
+    const target = restaurants.find(r => r.id === activeRestaurantId);
+    if (target) {
+      const maxTables = getTenantMaxTables(target);
+      if (maxTables !== null && target.tables.length >= maxTables) {
+        showNotification(`🚫 Table limit reached (${maxTables} max). Upgrade your plan or contact admin.`);
+        return;
+      }
+    }
+
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const newTag: TableNfcTag = {
       id: `tbl-${Date.now()}`,
@@ -588,11 +609,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const bulkGenerateTables = (count: number) => {
     if (count < 1 || count > 100) return;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    let actualCountAdded = 0;
+
     setRestaurants(prev => prev.map(r => {
       if (r.id !== activeRestaurantId) return r;
+      const maxTables = getTenantMaxTables(r);
       const existing = r.tables.length;
+
+      if (maxTables !== null && existing >= maxTables) {
+        showNotification(`🚫 Table limit reached (${maxTables} max). Upgrade your plan or contact admin.`);
+        return r;
+      }
+
+      const allowedCount = maxTables !== null ? Math.min(count, maxTables - existing) : count;
+      if (allowedCount <= 0) return r;
+      actualCountAdded = allowedCount;
+
       const slug = r.slug;
-      const newTables = Array.from({ length: count }, (_, i) => {
+      const newTables = Array.from({ length: allowedCount }, (_, i) => {
         const num = existing + i + 1;
         return {
           id: `tbl-${r.id}-${num}-${Date.now() + i}`,
@@ -608,7 +642,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
       return { ...r, tables: [...r.tables, ...newTables] };
     }));
-    showNotification(`Generated ${count} new table${count > 1 ? 's' : ''}`);
+
+    if (actualCountAdded > 0) {
+      showNotification(`Generated ${actualCountAdded} new table${actualCountAdded > 1 ? 's' : ''}`);
+    }
   };
 
   const deleteTable = (tableId: string) => {

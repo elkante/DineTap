@@ -47,10 +47,10 @@ export const PricingPage: React.FC<PricingPageProps> = ({
             className="flex items-center gap-2.5 text-left group"
           >
             <div className="w-10 h-10 rounded-2xl bg-[#0c2e22] text-[#D4AF37] flex items-center justify-center font-serif font-black text-xl shadow-md border border-[#D4AF37]/40">
-              D
+              T
             </div>
             <div>
-              <span className="font-serif font-extrabold text-xl tracking-tight text-stone-900 group-hover:text-amber-800 transition-colors">DineTap</span>
+              <span className="font-serif font-extrabold text-xl tracking-tight text-stone-900 group-hover:text-amber-800 transition-colors">TapMenu</span>
               <span className="text-[10px] block text-amber-800 font-mono -mt-1 uppercase tracking-wider font-bold">Luxury Digital Menus</span>
             </div>
           </button>
@@ -279,7 +279,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({
       <section className="max-w-6xl mx-auto px-4 py-12">
         <div className="text-center max-w-xl mx-auto mb-10">
           <h2 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900">
-            How DineTap Compares
+            How TapMenu Compares
           </h2>
           <p className="text-xs sm:text-sm text-stone-500 mt-1">
             Why leading Nigerian restaurateurs are swapping out paper menus and food aggregators.
@@ -292,7 +292,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({
               <thead className="bg-stone-50 border-b border-stone-200 text-stone-500 uppercase font-mono text-[10px]">
                 <tr>
                   <th className="p-4 sm:p-5">Feature</th>
-                  <th className="p-4 sm:p-5 text-[#0c2e22] font-bold text-xs bg-amber-50/50">DineTap</th>
+                  <th className="p-4 sm:p-5 text-[#0c2e22] font-bold text-xs bg-amber-50/50">TapMenu</th>
                   <th className="p-4 sm:p-5">Paper Laminated Menus</th>
                   <th className="p-4 sm:p-5">Delivery Apps (Chowdeck, Glovo)</th>
                 </tr>
@@ -341,7 +341,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({
             Frequently Asked Questions
           </h2>
           <p className="text-xs sm:text-sm text-stone-500 mt-1">
-            Everything you need to know about setting up DineTap in your venue.
+            Everything you need to know about setting up TapMenu in your venue.
           </p>
         </div>
 
@@ -349,7 +349,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({
           {[
             {
               q: 'How does table payment work? Do you take a percentage of our food sales?',
-              a: 'No. DineTap charges ZERO commission on orders. When diners select "Card Payment", your waiter brings your normal restaurant bank POS terminal to the table. If they select "Instant Transfer", your staff gives them your account details. DineTap is pure software to accelerate table turn and service.'
+              a: 'No. TapMenu charges ZERO commission on orders. When diners select "Card Payment", your waiter brings your normal restaurant bank POS terminal to the table. If they select "Instant Transfer", your staff gives them your account details. TapMenu is pure software to accelerate table turn and service.'
             },
             {
               q: 'Can we change dish prices or mark items sold out during rush hours?',
@@ -420,10 +420,10 @@ export const PricingPage: React.FC<PricingPageProps> = ({
       <footer className="border-t border-stone-200 py-8 bg-white text-center text-xs text-stone-500">
         <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2 font-serif font-bold text-stone-800">
-            <span className="w-6 h-6 rounded-lg bg-[#0c2e22] text-[#D4AF37] flex items-center justify-center text-xs">D</span>
-            <span>DineTap Nigeria &middot; Luxury Restaurant Platform</span>
+            <span className="w-6 h-6 rounded-lg bg-[#0c2e22] text-[#D4AF37] flex items-center justify-center text-xs font-serif font-black">T</span>
+            <span>TapMenu Nigeria &middot; Luxury Restaurant Platform</span>
           </div>
-          <div>&copy; {new Date().getFullYear()} DineTap Inc. All rights reserved.</div>
+          <div>&copy; {new Date().getFullYear()} TapMenu Inc. All rights reserved.</div>
         </div>
       </footer>
     </div>

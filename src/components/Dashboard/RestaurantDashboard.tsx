@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { setActiveSession, fileToDataUrl, saveDishToSupabase, deleteDishFromSupabase } from '../../utils/supabase';
 import { generateQrDataUrl } from '../../utils/nfc';
+import { getStoredPlans } from '../../utils/pricingConfig';
 import { 
   ChefHat, 
   Utensils, 
@@ -78,6 +79,30 @@ export const RestaurantDashboard: React.FC = () => {
   const design = activeRestaurant.design;
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const customerMenuUrl = `${origin}/?r=${activeRestaurant.slug}&table=Table+1`;
+
+  // ── Plan Table Limit Enforcement ─────────────────────────────────────────
+  // Priority: restaurant.tableLimit (admin override) → plan.maxTables → unlimited
+  const planConfig = (() => {
+    const plans = getStoredPlans();
+    const planId = (activeRestaurant.plan || '').toLowerCase();
+    // Match legacy plan strings too
+    if (planId.includes('enterprise')) return plans.find(p => p.id === 'enterprise');
+    if (planId.includes('premium'))    return plans.find(p => p.id === 'premium');
+    if (planId.includes('standard') || planId.includes('growth')) return plans.find(p => p.id === 'standard');
+    return plans.find(p => p.id === planId) || plans.find(p => p.id === 'basic');
+  })();
+
+  // null = unlimited
+  const effectiveTableLimit: number | null =
+    activeRestaurant.tableLimit !== undefined
+      ? activeRestaurant.tableLimit  // admin override wins
+      : (planConfig?.maxTables ?? null);
+
+  const currentTableCount = activeRestaurant.tables.length;
+  const isAtTableLimit = effectiveTableLimit !== null && currentTableCount >= effectiveTableLimit;
+  const remainingTables = effectiveTableLimit !== null ? Math.max(0, effectiveTableLimit - currentTableCount) : Infinity;
+  const planDisplayName = planConfig?.name || 'Basic';
+  // ─────────────────────────────────────────────────────────────────────────
 
   // Filter orders for active restaurant
   const restaurantOrders = orders.filter(o => o.restaurantId === activeRestaurant.id);
@@ -325,6 +350,12 @@ export const RestaurantDashboard: React.FC = () => {
     e.preventDefault();
     const cleanNum = newTableNumber.trim();
     if (!cleanNum) return;
+
+    // ── Plan limit check ──
+    if (effectiveTableLimit !== null && currentTableCount >= effectiveTableLimit) {
+      showNotification(`🚫 Table limit reached! Your ${planDisplayName} plan allows up to ${effectiveTableLimit} tables. Contact support to upgrade.`);
+      return;
+    }
 
     const formatted = cleanNum.toLowerCase().startsWith('table') ? cleanNum : `Table ${cleanNum}`;
     registerTableTag(formatted, `${formatted} Stand`, 'Dining Room', '');
@@ -861,33 +892,86 @@ export const RestaurantDashboard: React.FC = () => {
                 <h2 className="text-base font-extrabold text-neutral-900">Table QR Codes & Direct Links</h2>
                 <p className="text-xs text-neutral-500">
                   Every table gets a unique QR code & link. Orders arrive in the kitchen labelled with the exact table.{' '}
-                  You have <strong>{activeRestaurant.tables.length}</strong> table{activeRestaurant.tables.length !== 1 ? 's' : ''}.
+                  You have <strong>{currentTableCount}</strong> table{currentTableCount !== 1 ? 's' : ''}{' '}
+                  {effectiveTableLimit !== null ? (
+                    <span className={isAtTableLimit ? 'text-red-600 font-bold' : 'text-neutral-400'}>
+                      / {effectiveTableLimit} allowed ({planDisplayName} plan)
+                    </span>
+                  ) : (
+                    <span className="text-emerald-600 font-bold">— Unlimited (Enterprise)</span>
+                  )}
                 </p>
               </div>
-
             </div>
 
+            {/* Plan Table Limit Progress Bar */}
+            {effectiveTableLimit !== null && (
+              <div className={`rounded-2xl p-4 border ${isAtTableLimit ? 'bg-red-50 border-red-200' : 'bg-neutral-50 border-neutral-200'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-bold text-neutral-700">
+                    Table Usage — <span className="font-mono">{currentTableCount}</span> / <span className="font-mono">{effectiveTableLimit}</span>
+                  </div>
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${isAtTableLimit ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>
+                    {planDisplayName} Plan
+                  </span>
+                </div>
+                <div className="w-full bg-neutral-200 rounded-full h-2 overflow-hidden">
+                  <div
+                    className={`h-2 rounded-full transition-all duration-500 ${isAtTableLimit ? 'bg-red-500' : (currentTableCount / effectiveTableLimit > 0.8 ? 'bg-amber-500' : 'bg-emerald-500')}`}
+                    style={{ width: `${Math.min(100, (currentTableCount / effectiveTableLimit) * 100)}%` }}
+                  />
+                </div>
+                {isAtTableLimit ? (
+                  <p className="text-[11px] text-red-600 font-semibold mt-2">
+                    🚫 Table limit reached for your {planDisplayName} plan. Contact TapMenu to upgrade your subscription.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-neutral-500 mt-2">
+                    {remainingTables === 1 ? '1 table slot remaining' : `${remainingTables} table slots remaining`} on your {planDisplayName} plan.
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Bulk Generate Panel */}
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className={`border rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 ${isAtTableLimit ? 'bg-neutral-100 border-neutral-300 opacity-60' : 'bg-amber-50 border-amber-200'}`}>
               <div className="flex-1 min-w-0">
                 <div className="text-xs font-bold text-amber-900 mb-0.5">Bulk Generate Tables</div>
                 <div className="text-[11px] text-amber-700">
-                  Instantly create numbered tables (starts from Table {activeRestaurant.tables.length + 1}).
+                  {isAtTableLimit
+                    ? `You've reached the ${planDisplayName} plan limit of ${effectiveTableLimit} tables.`
+                    : `Instantly create numbered tables (starts from Table ${currentTableCount + 1}). ${effectiveTableLimit !== null ? `${remainingTables} slot${remainingTables !== 1 ? 's' : ''} remaining.` : ''}`
+                  }
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <input
                   type="number"
                   min={1}
-                  max={100}
+                  max={effectiveTableLimit !== null ? Math.min(100, remainingTables as number) : 100}
                   value={bulkCount}
-                  onChange={(e) => setBulkCount(Math.max(1, Math.min(100, Number(e.target.value))))}
-                  className="w-16 px-2 py-2 text-center bg-white border border-amber-300 rounded-xl text-xs font-bold focus:outline-none focus:border-amber-500"
+                  disabled={isAtTableLimit}
+                  onChange={(e) => {
+                    const max = effectiveTableLimit !== null ? Math.min(100, remainingTables as number) : 100;
+                    setBulkCount(Math.max(1, Math.min(max, Number(e.target.value))));
+                  }}
+                  className="w-16 px-2 py-2 text-center bg-white border border-amber-300 rounded-xl text-xs font-bold focus:outline-none focus:border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <button
-                  onClick={() => bulkGenerateTables(bulkCount)}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-colors"
+                  disabled={isAtTableLimit}
+                  onClick={() => {
+                    if (isAtTableLimit) {
+                      showNotification(`🚫 Table limit reached! Your ${planDisplayName} plan allows up to ${effectiveTableLimit} tables.`);
+                      return;
+                    }
+                    const allowed = effectiveTableLimit !== null ? Math.min(bulkCount, remainingTables as number) : bulkCount;
+                    if (allowed <= 0) { showNotification('No remaining table slots.'); return; }
+                    bulkGenerateTables(allowed);
+                    if (effectiveTableLimit !== null && allowed < bulkCount) {
+                      showNotification(`Generated ${allowed} table${allowed !== 1 ? 's' : ''} (capped at your ${planDisplayName} plan limit).`);
+                    }
+                  }}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-neutral-400"
                 >
                   Generate {bulkCount} Table{bulkCount !== 1 ? 's' : ''}
                 </button>
@@ -901,16 +985,19 @@ export const RestaurantDashboard: React.FC = () => {
                 required
                 value={newTableNumber}
                 onChange={(e) => setNewTableNumber(e.target.value)}
-                placeholder="Add custom table (e.g. VIP 1, Rooftop 2, Bar)"
-                className="flex-1 px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-xs focus:outline-none focus:border-neutral-900"
+                placeholder={isAtTableLimit ? `Plan limit reached (${effectiveTableLimit} tables max)` : 'Add custom table (e.g. VIP 1, Rooftop 2, Bar)'}
+                disabled={isAtTableLimit}
+                className="flex-1 px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-xs focus:outline-none focus:border-neutral-900 disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <button
                 type="submit"
-                className="px-4 py-2 bg-neutral-900 text-white rounded-xl text-xs font-bold shrink-0 hover:bg-neutral-800"
+                disabled={isAtTableLimit}
+                className="px-4 py-2 bg-neutral-900 text-white rounded-xl text-xs font-bold shrink-0 hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 + Add Table
               </button>
             </form>
+
 
 
             {/* Tables Grid */}

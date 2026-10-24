@@ -103,7 +103,10 @@ export interface RestaurantTenant {
   design: MenuBookDesign;
   pages: MenuBookPage[];
   tables: TableNfcTag[];
-  plan: 'Starter Digital' | 'Growth QR+Menu' | 'Pro NFC Suite';
+  /** Plan ID: 'basic' | 'standard' | 'premium' | 'enterprise' (or legacy string) */
+  plan: string;
+  /** Optional per-restaurant table limit override set by super admin (overrides plan maxTables) */
+  tableLimit?: number | null;
   status: 'active' | 'pending' | 'suspended';
   quickMenuEnabled: boolean;
   allowOrdering: boolean;

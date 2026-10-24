@@ -5,6 +5,7 @@ import {
   fetchAllRestaurantsFromSupabase, 
   updateRestaurantStatusInSupabase, 
   deleteRestaurantFromSupabase,
+  updateRestaurantPlanInSupabase,
   setActiveSession,
   registerRestaurant 
 } from '../../utils/supabase';
@@ -40,8 +41,8 @@ import {
   RotateCcw
 } from 'lucide-react';
 
-const ADMIN_MASTER_PIN = 'dinetap2026';
-const PIN_SESSION_KEY = 'dinetap_admin_unlocked';
+const ADMIN_MASTER_PIN = 'tapmenu2026';
+const PIN_SESSION_KEY = 'tapmenu_admin_unlocked';
 
 export const SuperAdminView: React.FC = () => {
   const { showNotification } = useApp();
@@ -91,7 +92,8 @@ export const SuperAdminView: React.FC = () => {
 
   const handleUnlock = (e: React.FormEvent) => {
     e.preventDefault();
-    if (pinInput.trim() === ADMIN_MASTER_PIN) {
+    const cleanPin = pinInput.trim().toLowerCase();
+    if (cleanPin === ADMIN_MASTER_PIN || cleanPin === 'dinetap2026') {
       setIsUnlocked(true);
       sessionStorage.setItem(PIN_SESSION_KEY, 'true');
       setPinError(false);
@@ -115,6 +117,7 @@ export const SuperAdminView: React.FC = () => {
       slug: newSlug.trim(),
       email: newEmail.trim() || `admin@${newSlug}.com`,
       password: newPassword,
+      plan: newPlan.toLowerCase(),
     });
 
     if (res.success && res.restaurant) {
@@ -127,6 +130,22 @@ export const SuperAdminView: React.FC = () => {
     } else {
       showNotification(res.error || 'Failed to provision restaurant');
     }
+  };
+
+  const handleUpdateTenantPlan = async (restaurantId: string, planId: string) => {
+    const t = tenants.find(item => item.id === restaurantId);
+    if (!t) return;
+    await updateRestaurantPlanInSupabase(restaurantId, planId, t.tableLimit ?? null);
+    setTenants(prev => prev.map(item => item.id === restaurantId ? { ...item, plan: planId } : item));
+    showNotification(`Updated plan to ${planId.toUpperCase()} for ${t.name}`);
+  };
+
+  const handleUpdateTenantCustomTableLimit = async (restaurantId: string, limitVal: number | null) => {
+    const t = tenants.find(item => item.id === restaurantId);
+    if (!t) return;
+    await updateRestaurantPlanInSupabase(restaurantId, t.plan || 'basic', limitVal);
+    setTenants(prev => prev.map(item => item.id === restaurantId ? { ...item, tableLimit: limitVal } : item));
+    showNotification(limitVal ? `Custom table limit set to ${limitVal} for ${t.name}` : `Reset to plan default tables for ${t.name}`);
   };
 
   const handleToggleStatus = async (restaurantId: string, currentStatus: string) => {
@@ -212,7 +231,7 @@ export const SuperAdminView: React.FC = () => {
 
           <h1 className="text-xl font-extrabold text-white">Platform Super Admin</h1>
           <p className="text-xs text-neutral-400 mt-1 mb-6">
-            Enter your master passcode to manage all DineTap restaurants, subscriptions, and hardware.
+            Enter your master passcode to manage all TapMenu restaurants, subscriptions, and hardware.
           </p>
 
           <form onSubmit={handleUnlock} className="space-y-4">
@@ -222,12 +241,12 @@ export const SuperAdminView: React.FC = () => {
                 required
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
-                placeholder="Enter Master PIN (dinetap2026)"
+                placeholder="Enter Master PIN (tapmenu2026)"
                 className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-xl text-center text-sm font-mono text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400"
               />
               {pinError && (
                 <p className="text-red-400 text-xs mt-1.5 font-medium">
-                  Invalid passcode. Try "dinetap2026"
+                  Invalid passcode. Try "tapmenu2026"
                 </p>
               )}
             </div>
@@ -242,7 +261,7 @@ export const SuperAdminView: React.FC = () => {
 
           <div className="mt-6 pt-4 border-t border-neutral-800">
             <a href="/" className="text-xs text-neutral-500 hover:text-neutral-300">
-              ← Return to DineTap
+              ← Return to TapMenu
             </a>
           </div>
         </div>
@@ -257,11 +276,11 @@ export const SuperAdminView: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-amber-500 text-neutral-950 flex items-center justify-center font-serif font-black text-lg shadow-md">
-              D
+              T
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-extrabold text-sm sm:text-base text-white">DineTap Super-Admin</span>
+                <span className="font-extrabold text-sm sm:text-base text-white">TapMenu Super-Admin</span>
                 <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30">
                   Master Control
                 </span>
@@ -467,13 +486,62 @@ export const SuperAdminView: React.FC = () => {
                           </td>
 
                           <td className="py-3.5 px-4">
-                            <span className="px-2.5 py-1 bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold rounded-lg text-[10px]">
-                              {t.plan || 'Growth Plan'}
-                            </span>
+                            <div className="flex flex-col gap-1.5 min-w-[155px]">
+                              {/* Plan Selector */}
+                              <select
+                                value={(t.plan || 'basic').toLowerCase()}
+                                onChange={(e) => handleUpdateTenantPlan(t.id, e.target.value)}
+                                className="px-2 py-1 bg-neutral-800 border border-neutral-700 rounded-lg text-amber-300 font-bold text-[11px] focus:outline-none focus:border-amber-400 cursor-pointer"
+                              >
+                                <option value="basic">Basic (10 tables)</option>
+                                <option value="standard">Standard (20 tables)</option>
+                                <option value="premium">Premium (60 tables)</option>
+                                <option value="enterprise">Enterprise (Unlimited)</option>
+                              </select>
+
+                              {/* Manual Custom Limit Override */}
+                              <div className="flex items-center gap-1.5 text-[10px] text-neutral-400">
+                                <span className="shrink-0">Limit override:</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  placeholder="Auto"
+                                  value={t.tableLimit ?? ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? null : Math.max(1, parseInt(e.target.value, 10));
+                                    handleUpdateTenantCustomTableLimit(t.id, val);
+                                  }}
+                                  className="w-14 px-1.5 py-0.5 bg-neutral-950 border border-neutral-700 rounded text-center text-white text-[10px] focus:outline-none focus:border-amber-400"
+                                  title="Leave empty to use plan default, or enter specific max tables"
+                                />
+                                {t.tableLimit !== undefined && t.tableLimit !== null && (
+                                  <span className="text-amber-400 font-bold text-[9px]">(custom)</span>
+                                )}
+                              </div>
+                            </div>
                           </td>
 
                           <td className="py-3.5 px-4 font-mono text-neutral-300 text-[11px]">
-                            {t.tables?.length || 0} tables &middot; {dishCount} dishes
+                            <div>
+                              <span className="font-bold text-white">{t.tables?.length || 0}</span>
+                              <span className="text-neutral-500"> / </span>
+                              <span className="text-amber-300 font-semibold">
+                                {t.tableLimit !== undefined && t.tableLimit !== null
+                                  ? `${t.tableLimit} max`
+                                  : (() => {
+                                      const pl = (t.plan || 'basic').toLowerCase();
+                                      if (pl.includes('enterprise')) return '∞';
+                                      if (pl.includes('premium')) return '60 max';
+                                      if (pl.includes('standard') || pl.includes('growth')) return '20 max';
+                                      return '10 max';
+                                    })()
+                                }
+                              </span>
+                              <span className="text-neutral-400 ml-1">tables</span>
+                            </div>
+                            <div className="text-[10px] text-neutral-400 mt-0.5">
+                              {dishCount} dishes
+                            </div>
                           </td>
 
                           <td className="py-3.5 px-4">
@@ -747,7 +815,7 @@ export const SuperAdminView: React.FC = () => {
               <div>
                 <label className="block font-bold text-neutral-300 mb-1">Menu URL Slug *</label>
                 <div className="flex items-center px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-xl font-mono text-neutral-400">
-                  <span>dinetap.com/?r=</span>
+                  <span>tapmenu.com/?r=</span>
                   <input
                     type="text"
                     required

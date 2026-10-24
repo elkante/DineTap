@@ -164,8 +164,9 @@ function mapDbRowToRestaurant(rRow: any, itemRows: any[] = []): RestaurantTenant
     address: rRow.address || '',
     phone: rRow.phone || '',
     openingHours: rRow.opening_hours || '10:00 AM - 10:00 PM',
-    plan: 'Growth QR+Menu',
-    status: 'active',
+    plan: rRow.plan || 'basic',
+    tableLimit: (rRow.table_limit !== undefined && rRow.table_limit !== null) ? Number(rRow.table_limit) : undefined,
+    status: (rRow.status as any) || 'active',
     quickMenuEnabled: true,
     allowOrdering: true,
     tableOrderingEnabled: true,
@@ -242,6 +243,8 @@ export async function registerRestaurant(data: {
   tagline?: string;
   logo?: string;
   coverColor?: string;
+  plan?: string;
+  tableLimit?: number | null;
 }): Promise<{ success: boolean; restaurant?: RestaurantTenant; error?: string }> {
   const cleanSlug = data.slug.toLowerCase().trim().replace(/[^a-z0-9-]+/g, '-').replace(/(^-|-$)/g, '');
   
@@ -252,6 +255,8 @@ export async function registerRestaurant(data: {
   const newId = `rest-${Date.now()}`;
   let ownerId = `usr-${Date.now()}`;
   const coverColor = data.coverColor || '#0c2e22';
+  const initialPlan = (data.plan || 'basic').toLowerCase();
+  const initialTableLimit = data.tableLimit ?? null;
 
   // 1. Try Supabase Auth
   if (supabase && data.password && data.email) {
@@ -280,6 +285,8 @@ export async function registerRestaurant(data: {
           tagline: data.tagline?.trim() || 'Kitchen & Bar',
           logo: data.logo || '🛡️',
           currency: data.currency || '₦',
+          plan: initialPlan,
+          table_limit: initialTableLimit,
         }
       ]);
 
@@ -304,6 +311,8 @@ export async function registerRestaurant(data: {
     logo: data.logo || '🛡️',
     currency: data.currency || '₦',
     cover_color: coverColor,
+    plan: initialPlan,
+    table_limit: initialTableLimit,
   }, []);
 
   // Save to local cache (new restaurant first)
@@ -617,8 +626,29 @@ export async function updateRestaurantStatusInSupabase(restaurantId: string, sta
 }
 
 /**
- * Delete restaurant completely from Supabase
+ * Update restaurant plan and optional tableLimit override in Supabase + local cache
  */
+export async function updateRestaurantPlanInSupabase(
+  restaurantId: string,
+  plan: string,
+  tableLimit: number | null
+): Promise<void> {
+  // Update local cache first for instant UI feedback
+  const stored = getStoredRestaurants();
+  const updated = stored.map(r => r.id === restaurantId ? { ...r, plan, tableLimit } : r);
+  saveStoredRestaurants(updated);
+
+  if (!supabase) return;
+  try {
+    await supabase.from('restaurants').update({
+      plan,
+      table_limit: tableLimit  // store null = unlimited
+    }).eq('id', restaurantId);
+  } catch (e) {
+    console.warn('Update restaurant plan error:', e);
+  }
+}
+
 export async function deleteRestaurantFromSupabase(restaurantId: string): Promise<void> {
   if (!supabase) return;
   try {

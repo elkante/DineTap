@@ -99,10 +99,10 @@ export const AuthPortal: React.FC = () => {
       <header className="max-w-5xl mx-auto w-full flex items-center justify-between py-4 border-b border-neutral-800">
         <div className="flex items-center gap-2.5">
           <div className="w-10 h-10 rounded-xl bg-amber-500 text-neutral-950 flex items-center justify-center font-extrabold text-xl shadow-lg shadow-amber-500/20">
-            D
+            T
           </div>
           <div>
-            <span className="font-extrabold text-lg tracking-tight">DineTap</span>
+            <span className="font-extrabold text-lg tracking-tight">TapMenu</span>
             <span className="text-[10px] block text-amber-400 font-mono -mt-1">RESTAURANT SAAS</span>
           </div>
         </div>
@@ -313,7 +313,7 @@ export const AuthPortal: React.FC = () => {
 
       {/* Footer */}
       <footer className="max-w-5xl mx-auto w-full text-center py-4 text-[11px] text-neutral-600 border-t border-neutral-900">
-        DineTap &copy; {new Date().getFullYear()} &middot; Digital Menus, Table QR Codes & Kitchen Display System
+        TapMenu &copy; {new Date().getFullYear()} &middot; Digital Menus, Table QR Codes & Kitchen Display System
       </footer>
     </div>
   );

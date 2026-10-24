@@ -1,4 +1,4 @@
-# DineTap SaaS — Interactive Digital Menu & Table Ordering Platform
+# TapMenu SaaS — Interactive Digital Menu & Table Ordering Platform
 
 Multi-tenant restaurant digital menu book and table ordering platform with digital smart card programming, QR table management, Kitchen Display (KDS), and administrative controls.
 
@@ -6,7 +6,7 @@ Multi-tenant restaurant digital menu book and table ordering platform with digit
 
 ## 🍽️ Direct Restaurant Payment Model
 
-DineTap is intentionally designed so **restaurants retain 100% control of their funds**:
+TapMenu is intentionally designed so **restaurants retain 100% control of their funds**:
 - **Zero Third-Party Gateway Friction:** No Paystack / payment aggregator accounts required to start.
 - **Card / POS at Table:** Waitstaff brings the restaurant's physical POS terminal when meals are served.
 - **Cash to Waitstaff:** Seamless cash collection directly by restaurant floor staff.
@@ -20,13 +20,13 @@ DineTap is intentionally designed so **restaurants retain 100% control of their 
 1. **Push to GitHub:**
    ```bash
    git add .
-   git commit -m "Configure DineTap for Vercel & Supabase with Direct Restaurant Payments"
+   git commit -m "Configure TapMenu for Vercel & Supabase with Direct Restaurant Payments"
    git branch -M main
    git push -u origin main
    ```
 
 2. **Import into Vercel:**
-   - Go to [vercel.com/new](https://vercel.com/new) and select the `elkante/DineTap` repository.
+   - Go to [vercel.com/new](https://vercel.com/new) and select the `tapmenu` repository.
    - Framework Preset: **Vite** (auto-detected via `vercel.json`).
    - Build Command: `vite build`
    - Output Directory: `dist`
@@ -41,7 +41,7 @@ DineTap is intentionally designed so **restaurants retain 100% control of their 
 
 ## 🗄️ Supabase Database Setup
 
-DineTap seamlessly saves orders and waiter buzzer calls to your Supabase project.
+TapMenu seamlessly saves orders and waiter buzzer calls to your Supabase project.
 
 1. Open your Supabase Dashboard: [https://supabase.com/dashboard/project/ikkljurxmfwmhhumoiqo/sql](https://supabase.com/dashboard/project/ikkljurxmfwmhhumoiqo/sql)
 2. Open the file [`supabase_schema.sql`](./supabase_schema.sql) in this repository.
