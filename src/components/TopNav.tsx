@@ -1,11 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
-  BookOpen, 
-  ListOrdered, 
   ShoppingBag, 
-  PhoneCall,
-  Sparkles
+  PhoneCall
 } from 'lucide-react';
 
 export const TopNav: React.FC<{ 

@@ -2,22 +2,8 @@ import React, { useState } from 'react';
 import { 
   Sparkles, 
   ArrowRight, 
-  QrCode, 
-  Nfc, 
-  ChefHat, 
-  Coins, 
-  Smartphone, 
-  ShieldCheck, 
   CheckCircle2, 
-  Store, 
-  UtensilsCrossed,
-  X,
-  CreditCard,
-  Building2,
-  Clock,
-  ExternalLink,
-  ChevronRight,
-  Palette
+  X
 } from 'lucide-react';
 import { registerRestaurant, loginRestaurantOwner } from '../../utils/supabase';
 import { useApp } from '../../context/AppContext';

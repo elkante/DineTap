@@ -226,9 +226,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (tableParam) {
         setCurrentTable(decodeURIComponent(tableParam));
-      } else {
-        setCurrentTable('Table 1');
       }
+      // No fallback: only show a table badge when explicitly arriving via a table-specific link
 
       if (srcParam === 'nfc') {
         setIsNfcSource(true);
