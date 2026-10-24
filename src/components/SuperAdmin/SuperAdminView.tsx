@@ -8,6 +8,10 @@ import {
   updateRestaurantPlanInSupabase,
   setActiveSession,
   registerRestaurant,
+  fetchPlatformContactConfig,
+  savePlatformContactConfig,
+  PlatformContactConfig,
+  DEFAULT_PLATFORM_CONTACT,
   supabase
 } from '../../utils/supabase';
 import { 
@@ -23,6 +27,9 @@ import {
   Users, 
   TrendingUp, 
   Plus, 
+  MessageCircle,
+  Settings,
+  Phone,
   ExternalLink, 
   Trash2, 
   CheckCircle2, 
@@ -83,11 +90,15 @@ export const SuperAdminView: React.FC = () => {
   const [tenants, setTenants] = useState<RestaurantTenant[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'restaurants' | 'plans' | 'hardware'>('restaurants');
+  const [activeTab, setActiveTab] = useState<'restaurants' | 'plans' | 'settings' | 'hardware'>('restaurants');
 
   // Live Subscription Plans
   const [plans, setPlans] = useState<PlanTier[]>(() => getStoredPlans());
   const [hasPlanChanges, setHasPlanChanges] = useState(false);
+
+  // Platform WhatsApp & Contact Settings
+  const [contactConfig, setContactConfig] = useState<PlatformContactConfig>(DEFAULT_PLATFORM_CONTACT);
+  const [isSavingContact, setIsSavingContact] = useState(false);
 
   // Modal: Onboard new restaurant
   const [isOnboardModalOpen, setIsOnboardModalOpen] = useState(false);
@@ -115,12 +126,18 @@ export const SuperAdminView: React.FC = () => {
     syncRemotePlans().then(live => {
       if (live) setPlans(live);
     });
+    fetchPlatformContactConfig().then(cfg => {
+      if (cfg) setContactConfig(cfg);
+    });
   }, []);
 
   // Fetch tenants whenever SuperAdmin becomes unlocked
   useEffect(() => {
     if (isUnlocked) {
       loadAllTenants();
+      fetchPlatformContactConfig().then(cfg => {
+        if (cfg) setContactConfig(cfg);
+      });
     }
   }, [isUnlocked]);
 
@@ -323,6 +340,19 @@ export const SuperAdminView: React.FC = () => {
     await deleteRestaurantFromSupabase(restaurantId);
     setTenants(prev => prev.filter(t => t.id !== restaurantId));
     showNotification(`Deleted "${name}"`);
+  };
+
+  const handleSaveContact = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingContact(true);
+    try {
+      await savePlatformContactConfig(contactConfig);
+      showNotification('🎉 WhatsApp contact settings saved! Live on homepage.');
+    } catch (err) {
+      showNotification('Failed to save WhatsApp settings.');
+    } finally {
+      setIsSavingContact(false);
+    }
   };
 
   const handleLoginAs = (tenant: RestaurantTenant) => {
@@ -649,6 +679,17 @@ export const SuperAdminView: React.FC = () => {
             {hasPlanChanges && (
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
             )}
+          </button>
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${
+              activeTab === 'settings'
+                ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+            }`}
+          >
+            <MessageCircle className="w-3.5 h-3.5" />
+            <span>Homepage WhatsApp Chat</span>
           </button>
           <button
             onClick={() => setActiveTab('hardware')}
@@ -1026,6 +1067,133 @@ export const SuperAdminView: React.FC = () => {
           </div>
         )}
 
+        {/* TAB: HOMEPAGE WHATSAPP & CONTACT SETTINGS */}
+        {activeTab === 'settings' && (
+          <div className="space-y-6">
+            <div className="bg-neutral-900 rounded-2xl border border-neutral-800 p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-[#25D366]/10 border border-[#25D366]/30 flex items-center justify-center text-[#25D366]">
+                      <MessageCircle className="w-4 h-4" />
+                    </div>
+                    <span>Homepage WhatsApp Chat Bubble Configuration</span>
+                  </h3>
+                  <p className="text-xs text-neutral-400 mt-1">
+                    Control the floating WhatsApp contact bubble in the bottom right corner of the TapMenu homepage for customer inquiries & onboardings.
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveContact} className="space-y-5 max-w-2xl">
+                <div>
+                  <label className="block text-xs font-bold text-neutral-200 mb-1 flex items-center gap-2">
+                    <Phone className="w-3.5 h-3.5 text-[#25D366]" />
+                    <span>WhatsApp Phone Number (International Format) *</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={contactConfig.whatsappNumber}
+                    onChange={(e) => setContactConfig(prev => ({ ...prev, whatsappNumber: e.target.value }))}
+                    placeholder="e.g. 2348000000000 or +234 800 000 0000"
+                    className="w-full px-4 py-3 bg-neutral-950 border border-neutral-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:border-[#25D366] focus:ring-1 focus:ring-[#25D366] transition-colors"
+                  />
+                  <p className="text-[11px] text-neutral-400 mt-1.5 leading-relaxed">
+                    Enter the phone number with country code. Symbols will be cleaned automatically. Examples: <span className="font-mono text-amber-300">2348012345678</span> (Nigeria), <span className="font-mono text-amber-300">14155551234</span> (USA), <span className="font-mono text-amber-300">447123456789</span> (UK).
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-neutral-200 mb-1 flex items-center gap-2">
+                    <MessageCircle className="w-3.5 h-3.5 text-[#25D366]" />
+                    <span>Default Chat Welcome Message *</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    required
+                    value={contactConfig.whatsappMessage}
+                    onChange={(e) => setContactConfig(prev => ({ ...prev, whatsappMessage: e.target.value }))}
+                    placeholder="Hello TapMenu Team! I'd like to learn more about digital menus for my restaurant."
+                    className="w-full px-4 py-3 bg-neutral-950 border border-neutral-700 rounded-xl text-white text-xs leading-relaxed focus:outline-none focus:border-[#25D366] focus:ring-1 focus:ring-[#25D366] transition-colors"
+                  />
+                  <p className="text-[11px] text-neutral-400 mt-1">
+                    Pre-filled message when the visitor taps the chat bubble on the landing page.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-neutral-200 mb-1">
+                    Support Email (Optional)
+                  </label>
+                  <input
+                    type="email"
+                    value={contactConfig.supportEmail || ''}
+                    onChange={(e) => setContactConfig(prev => ({ ...prev, supportEmail: e.target.value }))}
+                    placeholder="support@tapmenu.me"
+                    className="w-full px-4 py-2.5 bg-neutral-950 border border-neutral-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-400 transition-colors"
+                  />
+                </div>
+
+                {/* Live Preview & Direct Test Card */}
+                <div className="p-4 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-3">
+                  <div className="flex items-center justify-between text-xs font-bold text-neutral-300">
+                    <span>Live Interactive Chat Bubble Preview</span>
+                    <span className="text-[11px] text-emerald-400 font-mono">Status: Connected</span>
+                  </div>
+
+                  <div className="flex items-center gap-3.5 p-3 bg-neutral-900 rounded-xl border border-neutral-800">
+                    <div className="w-12 h-12 bg-[#25D366] text-white rounded-full flex items-center justify-center shadow-lg shrink-0">
+                      <MessageCircle className="w-6 h-6 fill-current" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <span>WhatsApp Chat Link</span>
+                        <span className="font-mono text-[10px] text-emerald-400 font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                          +{contactConfig.whatsappNumber.replace(/[^0-9]/g, '') || '2348000000000'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-neutral-400 truncate mt-0.5">
+                        "{contactConfig.whatsappMessage}"
+                      </p>
+                    </div>
+
+                    <a
+                      href={`https://wa.me/${contactConfig.whatsappNumber.replace(/[^0-9]/g, '') || '2348000000000'}?text=${encodeURIComponent(contactConfig.whatsappMessage)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3.5 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shrink-0 border border-neutral-700"
+                    >
+                      <span>Test Link</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={isSavingContact}
+                    className="px-6 py-3 bg-[#25D366] hover:bg-[#20ba59] text-neutral-950 font-black rounded-xl text-xs transition-all shadow-lg active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{isSavingContact ? 'Saving Settings...' : 'Save WhatsApp Settings'}</span>
+                  </button>
+                  <a
+                    href="/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-4 py-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5"
+                  >
+                    <span>View Live on Homepage</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* TAB 3: SUBSCRIPTION PLANS & PRICING EDITOR */}
         {activeTab === 'plans' && (
           <div className="space-y-6">
@@ -1231,8 +1399,19 @@ export const SuperAdminView: React.FC = () => {
 
         <button
           type="button"
+          onClick={() => setActiveTab('settings')}
+          className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'settings' ? 'text-amber-400 font-bold' : 'text-neutral-400 hover:text-neutral-200'
+          }`}
+        >
+          <MessageCircle className="w-5 h-5 mb-0.5" />
+          <span className="text-[10px]">WhatsApp</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab('hardware')}
-          className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all cursor-pointer ${
+          className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer ${
             activeTab === 'hardware' ? 'text-amber-400 font-bold' : 'text-neutral-400 hover:text-neutral-200'
           }`}
         >

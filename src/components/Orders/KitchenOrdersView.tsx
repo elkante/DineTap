@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Order, WaiterCall } from '../../types';
+import { playKitchenChime } from '../../utils/audio';
 import { 
   ChefHat, 
   Clock, 
@@ -10,10 +11,12 @@ import {
   QrCode, 
   ShoppingBag, 
   Check, 
-  AlertCircle 
+  AlertCircle,
+  Volume2
 } from 'lucide-react';
 
 export const KitchenOrdersView: React.FC = () => {
+  const [testingChime, setTestingChime] = useState(false);
   const { 
     orders, 
     updateOrderStatus, 
@@ -64,6 +67,23 @@ export const KitchenOrdersView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 text-xs">
+          <button
+            type="button"
+            onClick={() => {
+              setTestingChime(true);
+              playKitchenChime();
+              setTimeout(() => setTestingChime(false), 1200);
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs ${
+              testingChime 
+                ? 'bg-amber-500 text-neutral-950 scale-105 ring-2 ring-amber-300' 
+                : 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300/60'
+            }`}
+            title="Test loud kitchen buzzer sound"
+          >
+            <Volume2 className={`w-3.5 h-3.5 ${testingChime ? 'animate-bounce text-neutral-950' : 'text-amber-700'}`} />
+            <span>{testingChime ? 'Alert Sounding!' : 'Test Loud Alert'}</span>
+          </button>
           <button
             onClick={() => setCurrentView('flipbook')}
             className="px-2.5 py-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-lg text-xs font-semibold"

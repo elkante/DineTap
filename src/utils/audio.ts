@@ -67,22 +67,81 @@ export function playKitchenChime() {
     const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextClass) return;
     if (!audioCtx) audioCtx = new AudioContextClass();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
 
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(587.33, audioCtx.currentTime + 0.35); // D5
+    const now = audioCtx.currentTime;
 
-    gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+    // Master Dynamics Compressor: drives maximum perceived loudness without digital clipping
+    const compressor = audioCtx.createDynamicsCompressor();
+    compressor.threshold.setValueAtTime(-12, now);
+    compressor.knee.setValueAtTime(0, now);
+    compressor.ratio.setValueAtTime(18, now);
+    compressor.attack.setValueAtTime(0.001, now);
+    compressor.release.setValueAtTime(0.08, now);
 
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.35);
+    // Master Gain Stage: Maximum full-scale volume (1.0)
+    const masterGain = audioCtx.createGain();
+    masterGain.gain.setValueAtTime(1.0, now);
+
+    compressor.connect(masterGain);
+    masterGain.connect(audioCtx.destination);
+
+    // Helper: Play a piercing dual-harmonic kitchen bell pulse
+    const playBellTone = (freq1: number, freq2: number, startTime: number, duration: number) => {
+      if (!audioCtx) return;
+
+      // Primary High-Impact Bell Oscillator (Triangle for harmonic cut)
+      const osc1 = audioCtx.createOscillator();
+      osc1.type = 'triangle';
+      osc1.frequency.setValueAtTime(freq1, startTime);
+
+      // Overtone Oscillator (Sine for resonant ring)
+      const osc2 = audioCtx.createOscillator();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(freq2, startTime);
+
+      // Sharp High-Frequency Click Oscillator (cuts through kitchen hood noise)
+      const oscClick = audioCtx.createOscillator();
+      oscClick.type = 'sawtooth';
+      oscClick.frequency.setValueAtTime(freq2 * 1.5, startTime);
+
+      const toneGain = audioCtx.createGain();
+      toneGain.gain.setValueAtTime(0.95, startTime);
+      // Quick punchy decay with ringing tail
+      toneGain.gain.exponentialRampToValueAtTime(0.3, startTime + 0.08);
+      toneGain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+      const clickGain = audioCtx.createGain();
+      clickGain.gain.setValueAtTime(0.5, startTime);
+      clickGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.03);
+
+      osc1.connect(toneGain);
+      osc2.connect(toneGain);
+      oscClick.connect(clickGain);
+
+      toneGain.connect(compressor);
+      clickGain.connect(compressor);
+
+      osc1.start(startTime);
+      osc2.start(startTime);
+      oscClick.start(startTime);
+
+      osc1.stop(startTime + duration);
+      osc2.stop(startTime + duration);
+      oscClick.stop(startTime + 0.04);
+    };
+
+    // Pulse 1: High Attention Strike (E6: 1318.5Hz + B6: 1975.5Hz)
+    playBellTone(1318.5, 1975.5, now, 0.45);
+
+    // Pulse 2: Resonant Major Third (G#6: 1661.2Hz + E7: 2637Hz)
+    playBellTone(1661.2, 2637.0, now + 0.18, 0.55);
+
+    // Pulse 3: Secondary Wakeup Burst at +0.42s (Guarantees kitchen staff hear it over clattering dishes)
+    playBellTone(1760.0, 2349.3, now + 0.45, 0.65);
   } catch (err) {
-    console.debug('Kitchen chime skipped:', err);
+    console.debug('Kitchen loud alert chime skipped:', err);
   }
 }

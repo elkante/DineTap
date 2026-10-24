@@ -367,43 +367,140 @@ export async function loginRestaurantOwner(
   password?: string
 ): Promise<{ success: boolean; session?: OwnerSession; restaurant?: RestaurantTenant; error?: string }> {
   const cleanQuery = emailOrSlug.trim().toLowerCase();
+  const cleanPass = password?.trim() || '';
 
-  // 1. Try Supabase query by slug or email
-  if (supabase) {
+  if (!cleanQuery) {
+    return { success: false, error: 'Please enter your restaurant email or slug.' };
+  }
+
+  // 1. If input is an email address, verify via Supabase Auth
+  if (supabase && cleanQuery.includes('@')) {
+    if (!cleanPass) {
+      return { success: false, error: 'Please enter your account password to sign in with an email address.' };
+    }
+
     try {
-      const { data: rRow } = await supabase
+      const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
+        email: cleanQuery,
+        password: cleanPass,
+      });
+
+      if (authErr || !authData?.user) {
+        return { 
+          success: false, 
+          error: authErr?.message || 'Invalid email or password. Please try again.' 
+        };
+      }
+
+      const userId = authData.user.id;
+      // Query Supabase for the active restaurant owned by this user
+      const { data: rRow, error: rErr } = await supabase
         .from('restaurants')
         .select('*')
-        .or(`slug.eq.${cleanQuery},name.ilike.%${cleanQuery}%`)
+        .eq('owner_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
-      if (rRow) {
-        const { data: itemRows } = await supabase
-          .from('menu_items')
-          .select('*')
-          .eq('restaurant_id', rRow.id);
-
-        const mapped = mapDbRowToRestaurant(rRow, itemRows || []);
-        const sess: OwnerSession = {
-          userId: rRow.owner_id || `user-${rRow.id}`,
-          email: cleanQuery,
-          restaurantId: rRow.id,
-          restaurantSlug: rRow.slug,
+      if (!rRow || rErr) {
+        // User account exists in Supabase Auth, but the restaurant was deleted by an admin!
+        await supabase.auth.signOut().catch(() => {});
+        setActiveSession(null);
+        // Clear from local cache
+        const stored = getStoredRestaurants().filter(r => r.name.toLowerCase() !== cleanQuery);
+        saveStoredRestaurants(stored);
+        return { 
+          success: false, 
+          error: 'Your restaurant menu has been deleted or removed by an administrator. Please register a new menu account.' 
         };
-        setActiveSession(sess);
-        return { success: true, session: sess, restaurant: mapped };
       }
-    } catch (e) {
-      console.warn('Supabase login check:', e);
+
+      if (rRow.status === 'suspended') {
+        return { 
+          success: false, 
+          error: 'This restaurant account has been temporarily suspended by platform administration.' 
+        };
+      }
+
+      const { data: itemRows } = await supabase
+        .from('menu_items')
+        .select('*')
+        .eq('restaurant_id', rRow.id);
+
+      const mapped = mapDbRowToRestaurant(rRow, itemRows || []);
+      const sess: OwnerSession = {
+        userId,
+        email: cleanQuery,
+        restaurantId: rRow.id,
+        restaurantSlug: rRow.slug,
+      };
+      setActiveSession(sess);
+      const existing = getStoredRestaurants().filter(r => r.id !== rRow.id);
+      saveStoredRestaurants([mapped, ...existing]);
+      return { success: true, session: sess, restaurant: mapped };
+    } catch (e: any) {
+      console.warn('Supabase auth sign in error:', e);
+      return { success: false, error: e?.message || 'Authentication failed. Please verify your credentials.' };
     }
   }
 
-  // 2. Fallback to local storage
+  // 2. Query Supabase directly by slug or ID
+  if (supabase) {
+    try {
+      const cleanSlugCandidate = cleanQuery.replace(/[^a-z0-9-]+/g, '-');
+      const { data: rRow, error: rErr } = await supabase
+        .from('restaurants')
+        .select('*')
+        .or(`slug.eq.${cleanSlugCandidate},slug.eq.${cleanQuery},id.eq.${cleanQuery}`)
+        .limit(1)
+        .maybeSingle();
+
+      if (!rRow || rErr) {
+        // Invalidate active session if it was this slug
+        const activeSess = getActiveSession();
+        if (activeSess && (activeSess.restaurantSlug === cleanQuery || activeSess.restaurantId === cleanQuery)) {
+          setActiveSession(null);
+        }
+        return { 
+          success: false, 
+          error: `No active restaurant found for "${emailOrSlug}". It may have been deleted or the slug is incorrect.` 
+        };
+      }
+
+      if (rRow.status === 'suspended') {
+        return { 
+          success: false, 
+          error: 'This restaurant is currently suspended by platform administration.' 
+        };
+      }
+
+      const { data: itemRows } = await supabase
+        .from('menu_items')
+        .select('*')
+        .eq('restaurant_id', rRow.id);
+
+      const mapped = mapDbRowToRestaurant(rRow, itemRows || []);
+      const sess: OwnerSession = {
+        userId: rRow.owner_id || `user-${rRow.id}`,
+        email: cleanQuery,
+        restaurantId: rRow.id,
+        restaurantSlug: rRow.slug,
+      };
+      setActiveSession(sess);
+      const existing = getStoredRestaurants().filter(r => r.id !== rRow.id);
+      saveStoredRestaurants([mapped, ...existing]);
+      return { success: true, session: sess, restaurant: mapped };
+    } catch (e: any) {
+      console.warn('Supabase login check error:', e);
+      return { success: false, error: 'Could not connect to database. Please check your network connection.' };
+    }
+  }
+
+  // 3. Offline fallback ONLY if Supabase is completely unconfigured
   const stored = getStoredRestaurants();
   const matched = stored.find(r => 
     r.slug.toLowerCase() === cleanQuery || 
-    r.name.toLowerCase() === cleanQuery ||
-    cleanQuery.includes(r.slug.toLowerCase())
+    r.id === cleanQuery
   );
 
   if (matched) {
@@ -417,19 +514,7 @@ export async function loginRestaurantOwner(
     return { success: true, session: sess, restaurant: matched };
   }
 
-  if (stored.length > 0) {
-    const first = stored[0];
-    const sess: OwnerSession = {
-      userId: `user-${first.id}`,
-      email: cleanQuery,
-      restaurantId: first.id,
-      restaurantSlug: first.slug,
-    };
-    setActiveSession(sess);
-    return { success: true, session: sess, restaurant: first };
-  }
-
-  return { success: false, error: 'No matching restaurant found. Please create your restaurant account first!' };
+  return { success: false, error: `No restaurant found matching "${emailOrSlug}".` };
 }
 
 /**
@@ -637,7 +722,7 @@ export async function fetchAllRestaurantsFromSupabase(): Promise<RestaurantTenan
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (rRows && !rErr && rRows.length > 0) {
+      if (rRows && !rErr) {
         // Fetch all menu items
         const { data: allItems } = await supabase.from('menu_items').select('*');
         const itemsByRestId: Record<string, any[]> = {};
@@ -659,13 +744,9 @@ export async function fetchAllRestaurantsFromSupabase(): Promise<RestaurantTenan
           return mapped;
         });
 
-        // Merge any local-only restaurants that haven't been pushed to Supabase yet
-        const dbSlugs = new Set(dbRestaurants.map(r => r.slug.toLowerCase()));
-        const localOnly = localList.filter(l => !dbSlugs.has(l.slug.toLowerCase()));
-        const combined = [...dbRestaurants, ...localOnly];
-
-        saveStoredRestaurants(combined);
-        return combined;
+        // Supabase is the single source of truth: strictly sync and purge deleted restaurants
+        saveStoredRestaurants(dbRestaurants);
+        return dbRestaurants;
       }
     } catch (e) {
       console.warn('Super Admin fetch all restaurants error:', e);
@@ -747,15 +828,104 @@ export async function fetchPlatformSettingsFromSupabase(key: string): Promise<an
   return null;
 }
 
-export async function deleteRestaurantFromSupabase(restaurantId: string): Promise<void> {
-  if (!supabase) return;
+/**
+ * Platform WhatsApp & Contact Settings
+ */
+export interface PlatformContactConfig {
+  whatsappNumber: string;
+  whatsappMessage: string;
+  supportEmail: string;
+}
+
+export const DEFAULT_PLATFORM_CONTACT: PlatformContactConfig = {
+  whatsappNumber: '2348000000000',
+  whatsappMessage: "Hello TapMenu Team! I'd like to learn more about digital menus for my restaurant.",
+  supportEmail: 'support@tapmenu.me'
+};
+
+const KEY_PLATFORM_CONTACT = 'tapmenu_platform_contact_v1';
+
+export function getStoredPlatformContact(): PlatformContactConfig {
   try {
-    await supabase.from('menu_items').delete().eq('restaurant_id', restaurantId);
-    await supabase.from('orders').delete().eq('restaurant_id', restaurantId);
-    await supabase.from('waiter_calls').delete().eq('restaurant_id', restaurantId);
-    await supabase.from('restaurants').delete().eq('id', restaurantId);
+    const raw = localStorage.getItem(KEY_PLATFORM_CONTACT);
+    if (raw) return { ...DEFAULT_PLATFORM_CONTACT, ...JSON.parse(raw) };
+  } catch {}
+  return DEFAULT_PLATFORM_CONTACT;
+}
+
+export async function fetchPlatformContactConfig(): Promise<PlatformContactConfig> {
+  const stored = getStoredPlatformContact();
+  if (!supabase) return stored;
+  try {
+    const remote = await fetchPlatformSettingsFromSupabase('platform_contact');
+    if (remote && remote.whatsappNumber) {
+      const merged = { ...DEFAULT_PLATFORM_CONTACT, ...remote };
+      localStorage.setItem(KEY_PLATFORM_CONTACT, JSON.stringify(merged));
+      return merged;
+    }
+  } catch (err) {
+    console.debug('Failed to fetch remote platform contact config:', err);
+  }
+  return stored;
+}
+
+export async function savePlatformContactConfig(config: Partial<PlatformContactConfig>): Promise<boolean> {
+  const current = getStoredPlatformContact();
+  const rawNum = config.whatsappNumber !== undefined ? config.whatsappNumber : current.whatsappNumber;
+  const cleanNumber = rawNum.replace(/[^0-9]/g, '');
+
+  const updated: PlatformContactConfig = {
+    ...current,
+    ...config,
+    whatsappNumber: cleanNumber || current.whatsappNumber,
+  };
+
+  localStorage.setItem(KEY_PLATFORM_CONTACT, JSON.stringify(updated));
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('tapmenu_contact_updated', { detail: updated }));
+  }
+
+  if (supabase) {
+    try {
+      await savePlatformSettingsToSupabase('platform_contact', updated);
+    } catch (e) {
+      console.warn('Failed to save platform contact to Supabase:', e);
+    }
+  }
+  return true;
+}
+
+export async function deleteRestaurantFromSupabase(restaurantId: string): Promise<void> {
+  // 1. Immediately purge from local storage cache so it NEVER resurrects
+  try {
+    const stored = getStoredRestaurants();
+    const updated = stored.filter(r => r.id !== restaurantId && r.slug !== restaurantId);
+    saveStoredRestaurants(updated);
+
+    const activeSess = getActiveSession();
+    if (activeSess && (activeSess.restaurantId === restaurantId || activeSess.restaurantSlug === restaurantId)) {
+      setActiveSession(null);
+    }
   } catch (e) {
-    console.warn('Delete restaurant error:', e);
+    console.warn('Local cache cleanup on restaurant delete error:', e);
+  }
+
+  // 2. Delete all records from Supabase tables
+  if (supabase) {
+    try {
+      await supabase.from('menu_items').delete().eq('restaurant_id', restaurantId);
+      await supabase.from('orders').delete().eq('restaurant_id', restaurantId);
+      await supabase.from('waiter_calls').delete().eq('restaurant_id', restaurantId);
+      await supabase.from('restaurants').delete().eq('id', restaurantId);
+    } catch (e) {
+      console.warn('Delete restaurant from Supabase error:', e);
+    }
+  }
+
+  // 3. Broadcast deletion event
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('tapmenu_restaurant_deleted', { detail: { restaurantId } }));
   }
 }
 
