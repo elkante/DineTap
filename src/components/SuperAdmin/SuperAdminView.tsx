@@ -493,40 +493,41 @@ export const SuperAdminView: React.FC = () => {
     <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans selection:bg-amber-400 selection:text-neutral-950">
       {/* Top Admin Header */}
       <header className="border-b border-neutral-800 bg-neutral-900/90 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500 text-neutral-950 flex items-center justify-center font-serif font-black text-lg shadow-md">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-500 text-neutral-950 flex items-center justify-center font-serif font-black text-base sm:text-lg shadow-md shrink-0">
               T
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-sm sm:text-base text-white">TapMenu Super-Admin</span>
-                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30">
-                  Master Control
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="font-extrabold text-xs sm:text-base text-white truncate">TapMenu Admin</span>
+                <span className="px-1.5 sm:px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[9px] sm:text-[10px] font-bold border border-amber-500/30 shrink-0">
+                  Master
                 </span>
               </div>
-              <span className="text-[11px] text-neutral-400 block -mt-0.5">
+              <span className="text-[10px] sm:text-[11px] text-neutral-400 block -mt-0.5 truncate hidden sm:block">
                 Multi-Tenant PostgreSQL & Hardware Management
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 text-xs">
+          <div className="flex items-center gap-1.5 sm:gap-3 text-xs shrink-0">
             <button
               onClick={handleLock}
-              className="px-3 py-1.5 text-neutral-400 hover:text-white transition-colors"
+              className="px-2.5 sm:px-3 py-1.5 text-neutral-400 hover:text-white transition-colors text-[11px]"
+              title="Lock Admin Session"
             >
               Lock
             </button>
             <a
               href="/"
-              className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-xl transition-colors font-semibold"
+              className="px-2.5 sm:px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-xl transition-colors font-semibold text-[11px]"
             >
               Live Site
             </a>
             <button
               onClick={() => setIsOnboardModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold rounded-xl transition-all shadow-md active:scale-95"
+              className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold rounded-xl transition-all shadow-md active:scale-95 text-xs"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Onboard Restaurant</span>
@@ -535,62 +536,62 @@ export const SuperAdminView: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
+      {/* Main Content (with bottom padding on mobile for app tab bar) */}
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-5 sm:space-y-8 pb-28 md:pb-8">
         
         {/* KPI Metrics Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-2xl">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
+          <div className="bg-neutral-900 border border-neutral-800 p-3.5 sm:p-5 rounded-2xl">
             <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
               Total Restaurants
             </span>
-            <span className="text-3xl font-extrabold font-mono text-white mt-1 block">
+            <span className="text-2xl sm:text-3xl font-extrabold font-mono text-white mt-1 block">
               {totalRestaurants}
             </span>
-            <span className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Real tenants in Supabase
+            <span className="text-[10px] sm:text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3 shrink-0" /> Live Supabase
             </span>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-2xl">
+          <div className="bg-neutral-900 border border-neutral-800 p-3.5 sm:p-5 rounded-2xl">
             <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
               Total Table QR/NFCs
             </span>
-            <span className="text-3xl font-extrabold font-mono text-white mt-1 block">
+            <span className="text-2xl sm:text-3xl font-extrabold font-mono text-white mt-1 block">
               {totalTables}
             </span>
-            <span className="text-[11px] text-neutral-400 mt-1 block">
-              Active table points deployed
+            <span className="text-[10px] sm:text-[11px] text-neutral-400 mt-1 block truncate">
+              Active table points
             </span>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-2xl">
+          <div className="bg-neutral-900 border border-neutral-800 p-3.5 sm:p-5 rounded-2xl">
             <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
               Dishes Published
             </span>
-            <span className="text-3xl font-extrabold font-mono text-amber-400 mt-1 block">
+            <span className="text-2xl sm:text-3xl font-extrabold font-mono text-amber-400 mt-1 block">
               {totalDishes}
             </span>
-            <span className="text-[11px] text-neutral-400 mt-1 block">
-              Live menu items in cloud
+            <span className="text-[10px] sm:text-[11px] text-neutral-400 mt-1 block truncate">
+              Live menu items
             </span>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-2xl">
+          <div className="bg-neutral-900 border border-neutral-800 p-3.5 sm:p-5 rounded-2xl">
             <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
               Estimated Monthly MRR
             </span>
-            <span className="text-3xl font-extrabold font-mono text-emerald-400 mt-1 block">
+            <span className="text-2xl sm:text-3xl font-extrabold font-mono text-emerald-400 mt-1 block truncate">
               ₦{estimatedMrr.toLocaleString()}
             </span>
-            <span className="text-[11px] text-neutral-400 mt-1 block">
+            <span className="text-[10px] sm:text-[11px] text-neutral-400 mt-1 block truncate">
               SaaS subscription pipeline
             </span>
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b border-neutral-800 pb-3">
+        {/* Navigation Tabs (Desktop view) */}
+        <div className="hidden md:flex items-center gap-2 border-b border-neutral-800 pb-3">
           <button
             onClick={() => setActiveTab('restaurants')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
@@ -653,8 +654,8 @@ export const SuperAdminView: React.FC = () => {
               </button>
             </div>
 
-            {/* Restaurants Table */}
-            <div className="bg-neutral-900 rounded-2xl border border-neutral-800 overflow-hidden shadow-lg">
+            {/* Desktop Restaurants Table */}
+            <div className="hidden md:block bg-neutral-900 rounded-2xl border border-neutral-800 overflow-hidden shadow-lg">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-neutral-950/60 border-b border-neutral-800 text-neutral-400 font-bold uppercase tracking-wider text-[10px]">
@@ -808,6 +809,140 @@ export const SuperAdminView: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+            </div>
+
+            {/* Mobile Restaurant Cards List */}
+            <div className="space-y-3.5 md:hidden">
+              {filteredTenants.map((t) => {
+                const dishCount = t.pages.reduce((sum, p) => sum + p.items.length, 0);
+                const customerUrl = `/?r=${t.slug}&table=Table+1`;
+
+                return (
+                  <div key={t.id} className="bg-neutral-900 rounded-2xl border border-neutral-800 p-4 shadow-md space-y-3">
+                    {/* Header: Logo, Name, Status */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-neutral-800 border border-neutral-700 overflow-hidden flex items-center justify-center shrink-0">
+                          {t.logo && (t.logo.startsWith('data:') || t.logo.startsWith('http') || t.logo.startsWith('/')) ? (
+                            <img src={t.logo} alt={t.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-xl">{t.logo || '🛡️'}</span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-white text-sm truncate">{t.name}</h4>
+                          <p className="text-[11px] text-neutral-400 truncate">{t.tagline || 'Kitchen & Bar'}</p>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleToggleStatus(t.id, t.status)}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors shrink-0 ${
+                          t.status === 'active'
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                            : 'bg-red-500/10 text-red-400 border-red-500/30'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${t.status === 'active' ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+                        <span>{t.status === 'active' ? 'Active' : 'Suspended'}</span>
+                      </button>
+                    </div>
+
+                    {/* Live URL Link & Table/Dish Counts */}
+                    <div className="flex items-center justify-between text-xs pt-2 border-t border-neutral-800/80">
+                      <a
+                        href={customerUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-amber-400 hover:underline flex items-center gap-1 font-mono text-[11px] truncate max-w-[50%]"
+                      >
+                        <span className="truncate">/?r={t.slug}</span>
+                        <ExternalLink className="w-3 h-3 shrink-0" />
+                      </a>
+                      <div className="font-mono text-[11px] text-neutral-300 shrink-0">
+                        <span className="font-bold text-white">{t.tables?.length || 0}</span>
+                        <span className="text-neutral-500">/</span>
+                        <span className="text-amber-300 font-semibold">
+                          {t.tableLimit !== undefined && t.tableLimit !== null
+                            ? `${t.tableLimit}`
+                            : (() => {
+                                const pl = (t.plan || 'basic').toLowerCase();
+                                if (pl.includes('enterprise')) return '∞';
+                                if (pl.includes('premium')) return '60';
+                                if (pl.includes('standard') || pl.includes('growth')) return '20';
+                                return '10';
+                              })()
+                          }
+                        </span>
+                        <span className="text-neutral-400 ml-1">tbls</span>
+                        <span className="text-neutral-500 mx-1">·</span>
+                        <span className="text-neutral-400">{dishCount} dishes</span>
+                      </div>
+                    </div>
+
+                    {/* Plan & Limit Overrides */}
+                    <div className="bg-neutral-950/70 rounded-xl p-2.5 border border-neutral-800 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-neutral-400">Plan</label>
+                        <select
+                          value={(t.plan || 'basic').toLowerCase()}
+                          onChange={(e) => handleUpdateTenantPlan(t.id, e.target.value)}
+                          className="px-2.5 py-1 bg-neutral-900 border border-neutral-700 rounded-lg text-amber-300 font-bold text-xs focus:outline-none focus:border-amber-400 cursor-pointer"
+                        >
+                          <option value="basic">Basic (10 tables)</option>
+                          <option value="standard">Standard (20 tables)</option>
+                          <option value="premium">Premium (60 tables)</option>
+                          <option value="enterprise">Enterprise (Unlimited)</option>
+                        </select>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-neutral-400">Table Limit Override</label>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="number"
+                            min={1}
+                            placeholder="Auto"
+                            value={t.tableLimit ?? ''}
+                            onChange={(e) => {
+                              const val = e.target.value === '' ? null : Math.max(1, parseInt(e.target.value, 10));
+                              handleUpdateTenantCustomTableLimit(t.id, val);
+                            }}
+                            className="w-16 px-2 py-1 bg-neutral-900 border border-neutral-700 rounded-lg text-center text-white text-xs focus:outline-none focus:border-amber-400"
+                          />
+                          {t.tableLimit !== undefined && t.tableLimit !== null && (
+                            <span className="text-amber-400 font-bold text-[9px]">(custom)</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card Actions */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={() => handleLoginAs(t)}
+                        className="flex-1 py-2 px-3 bg-neutral-800 hover:bg-neutral-700 text-white rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow"
+                      >
+                        <Store className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Manage Venue</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteRestaurant(t.id, t.name)}
+                        className="p-2 text-neutral-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl border border-neutral-800 transition-colors"
+                        title="Delete venue"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {filteredTenants.length === 0 && (
+                <div className="py-8 text-center text-neutral-500 bg-neutral-900 rounded-2xl border border-neutral-800 text-xs">
+                  No matching restaurants found in Supabase database.
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1020,6 +1155,57 @@ export const SuperAdminView: React.FC = () => {
         )}
 
       </main>
+
+      {/* ALWAYS-VISIBLE MOBILE FLOATING ACTION BUTTON */}
+      <div className="fixed bottom-20 right-4 z-40 md:hidden">
+        <button
+          type="button"
+          onClick={() => setIsOnboardModalOpen(true)}
+          className="flex items-center gap-2 px-4 py-3 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black rounded-full shadow-2xl shadow-amber-500/40 active:scale-95 border border-amber-300 transition-all cursor-pointer"
+        >
+          <Plus className="w-5 h-5 stroke-[2.5]" />
+          <span className="text-xs font-bold uppercase tracking-wide">Onboard</span>
+        </button>
+      </div>
+
+      {/* MOBILE APP-STYLE BOTTOM NAVIGATION BAR */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-neutral-950/95 backdrop-blur-xl border-t border-neutral-800 md:hidden px-3 py-2 flex items-center justify-around safe-bottom shadow-2xl">
+        <button
+          type="button"
+          onClick={() => setActiveTab('restaurants')}
+          className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'restaurants' ? 'text-amber-400 font-bold' : 'text-neutral-400 hover:text-neutral-200'
+          }`}
+        >
+          <Building2 className="w-5 h-5 mb-0.5" />
+          <span className="text-[10px]">Venues ({totalRestaurants})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('plans')}
+          className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all relative cursor-pointer ${
+            activeTab === 'plans' ? 'text-amber-400 font-bold' : 'text-neutral-400 hover:text-neutral-200'
+          }`}
+        >
+          <CreditCard className="w-5 h-5 mb-0.5" />
+          <span className="text-[10px]">Plans & Pricing</span>
+          {hasPlanChanges && (
+            <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('hardware')}
+          className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all cursor-pointer ${
+            activeTab === 'hardware' ? 'text-amber-400 font-bold' : 'text-neutral-400 hover:text-neutral-200'
+          }`}
+        >
+          <Package className="w-5 h-5 mb-0.5" />
+          <span className="text-[10px]">Cards</span>
+        </button>
+      </nav>
 
       {/* MODAL: Onboard Restaurant */}
       {isOnboardModalOpen && (
