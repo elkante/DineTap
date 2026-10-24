@@ -159,23 +159,23 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
       </nav>
 
       {/* Hero Section: Full-bleed background image with text directly overlaying it */}
-      <section id="hero" className="relative min-h-[580px] sm:min-h-[640px] lg:min-h-[680px] flex items-center justify-center text-center overflow-hidden bg-stone-950">
-        {/* Full-bleed background restaurant hero photography */}
+      <section id="hero" className="relative min-h-[580px] sm:min-h-[640px] lg:min-h-[680px] flex items-center justify-center text-center overflow-hidden bg-stone-900">
+        {/* Full-bleed background restaurant hero photography - bright, warm, and inviting */}
         <img
-          src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=2000&q=85"
-          alt="Luxury Restaurant Dining Scene"
-          className="absolute inset-0 w-full h-full object-cover object-center transform scale-105"
+          src="https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?auto=format&fit=crop&w=2000&q=90"
+          alt="Warm Luxury Restaurant Dining Tables"
+          className="absolute inset-0 w-full h-full object-cover object-center transform scale-105 filter brightness-105 contrast-105"
         />
 
-        {/* Dark Scrim & Atmosphere Gradient Overlays for High Text Contrast */}
-        <div className="absolute inset-0 bg-stone-950/75 sm:bg-stone-950/70" />
+        {/* Balanced, Light Scrim: keeps the bright restaurant scene clearly visible while maintaining high text readability */}
+        <div className="absolute inset-0 bg-stone-950/40 sm:bg-stone-950/35" />
         <div 
           className="absolute inset-0 pointer-events-none"
           style={{
-            background: 'radial-gradient(circle at center, rgba(12, 46, 34, 0.55) 0%, rgba(10, 14, 12, 0.88) 100%)'
+            background: 'radial-gradient(circle at center, rgba(12, 46, 34, 0.25) 0%, rgba(10, 14, 12, 0.65) 100%)'
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-transparent to-stone-950/80 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-stone-950/80 via-transparent to-stone-950/40 pointer-events-none" />
 
         {/* Hero Content directly ON TOP of the background image */}
         <div className="relative z-10 max-w-5xl mx-auto px-4 py-16 sm:py-24 flex flex-col items-center">
