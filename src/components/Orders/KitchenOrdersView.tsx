@@ -23,10 +23,21 @@ export const KitchenOrdersView: React.FC = () => {
     setCurrentView 
   } = useApp();
 
-  const activeOrders = orders.filter(o => o.status !== 'served');
-  const completedOrders = orders.filter(o => o.status === 'served');
+  const restaurantOrders = orders.filter(o => 
+    !o.restaurantId ||
+    o.restaurantId === activeRestaurant.id ||
+    (activeRestaurant.slug && o.restaurantId.toLowerCase() === activeRestaurant.slug.toLowerCase())
+  );
+  const activeOrders = restaurantOrders.filter(o => o.status !== 'served');
+  const completedOrders = restaurantOrders.filter(o => o.status === 'served');
 
-  const todayRevenue = orders
+  const restaurantCalls = waiterCalls.filter(c => 
+    !c.restaurantId ||
+    c.restaurantId === activeRestaurant.id ||
+    (activeRestaurant.slug && c.restaurantId.toLowerCase() === activeRestaurant.slug.toLowerCase())
+  );
+
+  const todayRevenue = restaurantOrders
     .filter(o => o.status !== 'pending')
     .reduce((sum, o) => sum + o.total, 0);
 
@@ -77,14 +88,14 @@ export const KitchenOrdersView: React.FC = () => {
         </div>
 
       {/* Waiter Assistance Alert Banner (If active table calls) */}
-      {waiterCalls.length > 0 && (
+      {restaurantCalls.length > 0 && (
         <div className="bg-amber-500 text-neutral-950 p-4 rounded-2xl shadow-md space-y-2">
           <div className="flex items-center gap-2 font-bold text-sm">
             <PhoneCall className="w-4 h-4 animate-bounce" />
-            <span>Active Table Call Alerts ({waiterCalls.length})</span>
+            <span>Active Table Call Alerts ({restaurantCalls.length})</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-            {waiterCalls.map((call) => (
+            {restaurantCalls.map((call) => (
               <div 
                 key={call.id} 
                 className="bg-neutral-900 text-white p-3 rounded-xl flex items-center justify-between text-xs shadow-sm"

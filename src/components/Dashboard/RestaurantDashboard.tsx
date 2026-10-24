@@ -104,10 +104,20 @@ export const RestaurantDashboard: React.FC = () => {
   const planDisplayName = planConfig?.name || 'Basic';
   // ─────────────────────────────────────────────────────────────────────────
 
-  // Filter orders for active restaurant
-  const restaurantOrders = orders.filter(o => o.restaurantId === activeRestaurant.id);
+  // Filter orders for active restaurant (matching on id, slug, or if id is empty)
+  const restaurantOrders = orders.filter(o => 
+    !o.restaurantId ||
+    o.restaurantId === activeRestaurant.id ||
+    (activeRestaurant.slug && o.restaurantId.toLowerCase() === activeRestaurant.slug.toLowerCase())
+  );
   const activeOrders = restaurantOrders.filter(o => o.status !== 'served');
   const completedOrders = restaurantOrders.filter(o => o.status === 'served');
+
+  const restaurantCalls = waiterCalls.filter(c => 
+    !c.restaurantId ||
+    c.restaurantId === activeRestaurant.id ||
+    (activeRestaurant.slug && c.restaurantId.toLowerCase() === activeRestaurant.slug.toLowerCase())
+  );
 
   // Generate QR code for every table
   useEffect(() => {
@@ -482,17 +492,17 @@ export const RestaurantDashboard: React.FC = () => {
         {activeTab === 'kds' && (
           <div className="space-y-4">
             {/* Waiter Buzzer Banner */}
-            {waiterCalls.length > 0 && (
+            {restaurantCalls.length > 0 && (
               <div className="p-4 bg-amber-500 text-neutral-950 rounded-2xl shadow flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <PhoneCall className="w-5 h-5 animate-bounce" />
                   <div>
                     <span className="font-extrabold text-sm block">Active Table Assistance Buzzer</span>
-                    <span className="text-xs">{waiterCalls.map(c => `${c.tableNumber}: ${c.reason}`).join(' | ')}</span>
+                    <span className="text-xs">{restaurantCalls.map(c => `${c.tableNumber}: ${c.reason}`).join(' | ')}</span>
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  {waiterCalls.map(c => (
+                  {restaurantCalls.map(c => (
                     <button
                       key={c.id}
                       onClick={() => resolveWaiterCall(c.id)}
@@ -507,8 +517,14 @@ export const RestaurantDashboard: React.FC = () => {
 
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-base font-extrabold text-neutral-900">Live Kitchen Tickets</h2>
-                <p className="text-xs text-neutral-500">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-extrabold text-neutral-900">Live Kitchen Tickets</h2>
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Live Sync
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-500 mt-0.5">
                   New orders placed by diners at their tables arrive here instantly with an audio chime.
                 </p>
               </div>

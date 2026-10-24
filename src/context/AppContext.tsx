@@ -9,7 +9,8 @@ import {
   NfcStatus, 
   CartItem, 
   Order, 
-  WaiterCall 
+  WaiterCall,
+  TableNfcTag
 } from '../types';
 import { INITIAL_RESTAURANTS, TEMPLATE_PRESETS, createDefaultRestaurantTenant } from '../data/initialData';
 import { playKitchenChime } from '../utils/audio';
@@ -25,7 +26,8 @@ import {
   setActiveSession as saveActiveSession, 
   OwnerSession,
   getStoredRestaurants,
-  saveStoredRestaurants
+  saveStoredRestaurants,
+  supabase
 } from '../utils/supabase';
 import { getStoredPlans } from '../utils/pricingConfig';
 
@@ -78,6 +80,7 @@ interface AppContextType {
   deleteTable: (tableId: string) => void;
   updateTableStatus: (tableId: string, status: NfcStatus) => void;
   replaceDamagedTag: (tableId: string, newSerial: string) => void;
+  simulateNfcTap: (tableNumber: string) => void;
 
   // Ordering & Waiter Actions
   addToCart: (item: FoodItem, notes?: string, qty?: number) => void;
@@ -257,68 +260,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Poll Supabase in background for real-time kitchen orders & waiter buzzer calls
-  useEffect(() => {
-    if (!activeRestaurantId) return;
-
-    let isMounted = true;
-    const pollSupabase = async () => {
-      try {
-        const [remoteOrders, remoteCalls] = await Promise.all([
-          fetchOrdersFromSupabase(activeRestaurantId),
-          fetchWaiterCallsFromSupabase(activeRestaurantId)
-        ]);
-
-        if (!isMounted) return;
-
-        if (remoteOrders && remoteOrders.length > 0) {
-          setOrders(prev => {
-            const prevIds = new Set(prev.map(o => o.id));
-            const hasNew = remoteOrders.some(o => !prevIds.has(o.id));
-            if (hasNew && !isCustomerRoute) {
-              playKitchenChime();
-            }
-            return remoteOrders;
-          });
-        }
-
-        if (remoteCalls && remoteCalls.length > 0) {
-          setWaiterCalls(prev => {
-            const prevIds = new Set(prev.map(c => c.id));
-            const hasNew = remoteCalls.some(c => !prevIds.has(c.id));
-            if (hasNew && !isCustomerRoute) {
-              playKitchenChime();
-            }
-            return remoteCalls;
-          });
-        }
-      } catch (e) {
-        // network hiccups tolerated
-      }
-    };
-
-    pollSupabase();
-    const interval = setInterval(pollSupabase, 3500);
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, [activeRestaurantId, isCustomerRoute]);
-
-  // Persist restaurants
-  useEffect(() => {
-    saveStoredRestaurants(restaurants);
-  }, [restaurants]);
-
-  // Persist orders
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(orders));
-    } catch (e) {
-      console.warn('Orders storage write error', e);
-    }
-  }, [orders]);
-
   // Active restaurant reference: strictly match customer requested slug or owner session, NEVER leak stale cached restaurants
   const activeRestaurant = useMemo(() => {
     if (isCustomerRoute && requestedSlug) {
@@ -341,6 +282,226 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return restaurants[0] || EMPTY_RESTAURANT;
   }, [restaurants, activeRestaurantId, isCustomerRoute, requestedSlug, ownerSession]);
+
+  // Real-time synchronization: Supabase Realtime + Multi-tab BroadcastChannel + Local Storage + Polling fallback
+  useEffect(() => {
+    const targetRestId = activeRestaurant.id || activeRestaurantId || (
+      ownerSession?.restaurantId || ''
+    );
+    const targetSlug = activeRestaurant.slug || requestedSlug || ownerSession?.restaurantSlug || '';
+
+    if (!targetRestId && !targetSlug) return;
+
+    let isMounted = true;
+
+    // 1. Cross-tab BroadcastChannel listener for instant same-browser updates
+    let broadcast: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        broadcast = new BroadcastChannel('tapmenu_live_sync');
+        broadcast.onmessage = (event) => {
+          if (!isMounted) return;
+          const { type, order, call, orderId, status } = event.data || {};
+          if (type === 'NEW_ORDER' && order) {
+            setOrders(prev => {
+              if (prev.some(o => o.id === order.id)) return prev;
+              if (!isCustomerRoute) playKitchenChime();
+              return [order, ...prev];
+            });
+          } else if (type === 'ORDER_STATUS_UPDATE' && orderId) {
+            setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+          } else if (type === 'NEW_WAITER_CALL' && call) {
+            setWaiterCalls(prev => {
+              if (prev.some(c => c.id === call.id)) return prev;
+              if (!isCustomerRoute) playKitchenChime();
+              return [call, ...prev];
+            });
+          } else if (type === 'WAITER_CALL_RESOLVED' && event.data.callId) {
+            setWaiterCalls(prev => prev.filter(c => c.id !== event.data.callId));
+          }
+        };
+      }
+    } catch {}
+
+    // 2. Storage event listener (standard cross-tab synchronization)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (!isMounted) return;
+      if (e.key === STORAGE_KEY_ORDERS && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed)) {
+            setOrders(prev => {
+              const prevIds = new Set(prev.map(o => o.id));
+              const hasNew = parsed.some(o => !prevIds.has(o.id));
+              if (hasNew && !isCustomerRoute) playKitchenChime();
+              return parsed;
+            });
+          }
+        } catch {}
+      } else if (e.key === STORAGE_KEY_CALLS && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed)) {
+            setWaiterCalls(parsed);
+          }
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    // 3. Supabase Realtime Channel
+    let supabaseChannel: any = null;
+    if (supabase && targetRestId) {
+      try {
+        supabaseChannel = supabase
+          .channel(`kds-sync-${targetRestId}`)
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'orders' },
+            (payload: any) => {
+              if (!isMounted) return;
+              if (payload.eventType === 'INSERT' && payload.new) {
+                const row = payload.new;
+                const matchesRest = row.restaurant_id === targetRestId || (targetSlug && row.restaurant_id === targetSlug);
+                if (!matchesRest) return;
+
+                const mapped: Order = {
+                  id: row.id,
+                  restaurantId: row.restaurant_id,
+                  tableNumber: row.table_number,
+                  customerName: row.customer_name || 'Guest Diner',
+                  items: row.items || [],
+                  total: Number(row.total) || 0,
+                  status: row.status || 'pending',
+                  createdAt: new Date(row.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  source: row.source || 'qr'
+                };
+
+                setOrders(prev => {
+                  if (prev.some(o => o.id === mapped.id)) return prev;
+                  if (!isCustomerRoute) playKitchenChime();
+                  return [mapped, ...prev];
+                });
+              } else if (payload.eventType === 'UPDATE' && payload.new) {
+                const row = payload.new;
+                setOrders(prev => prev.map(o => o.id === row.id ? { ...o, status: row.status } : o));
+              } else if (payload.eventType === 'DELETE' && payload.old) {
+                setOrders(prev => prev.filter(o => o.id !== payload.old.id));
+              }
+            }
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'waiter_calls' },
+            (payload: any) => {
+              if (!isMounted) return;
+              if (payload.eventType === 'INSERT' && payload.new) {
+                const row = payload.new;
+                const matchesRest = row.restaurant_id === targetRestId || (targetSlug && row.restaurant_id === targetSlug);
+                if (!matchesRest) return;
+
+                const mapped: WaiterCall = {
+                  id: row.id,
+                  restaurantId: row.restaurant_id,
+                  tableNumber: row.table_number,
+                  reason: row.reason,
+                  timestamp: new Date(row.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  status: row.status
+                };
+
+                setWaiterCalls(prev => {
+                  if (prev.some(c => c.id === mapped.id)) return prev;
+                  if (!isCustomerRoute) playKitchenChime();
+                  return [mapped, ...prev];
+                });
+              } else if (payload.eventType === 'UPDATE' && payload.new) {
+                const row = payload.new;
+                if (row.status === 'resolved') {
+                  setWaiterCalls(prev => prev.filter(c => c.id !== row.id));
+                }
+              }
+            }
+          )
+          .subscribe();
+      } catch (err) {
+        console.warn('Realtime channel subscription notice:', err);
+      }
+    }
+
+    // 4. Reliable Polling Loop (every 2.5 seconds)
+    const pollSupabase = async () => {
+      try {
+        const queryId = targetRestId || targetSlug;
+        const [remoteOrders, remoteCalls] = await Promise.all([
+          fetchOrdersFromSupabase(queryId, targetSlug),
+          fetchWaiterCallsFromSupabase(queryId, targetSlug)
+        ]);
+
+        if (!isMounted) return;
+
+        if (Array.isArray(remoteOrders)) {
+          setOrders(prev => {
+            const prevMap = new Map(prev.map(o => [o.id, o]));
+            let hasNew = false;
+            remoteOrders.forEach(ro => {
+              if (!prevMap.has(ro.id)) hasNew = true;
+            });
+
+            if (hasNew && !isCustomerRoute) {
+              playKitchenChime();
+            }
+
+            // Merge: remote orders are authoritative, but preserve optimistic local orders
+            const mergedMap = new Map<string, Order>();
+            remoteOrders.forEach(o => mergedMap.set(o.id, o));
+            prev.forEach(o => {
+              if (!mergedMap.has(o.id)) {
+                mergedMap.set(o.id, o);
+              }
+            });
+            return Array.from(mergedMap.values());
+          });
+        }
+
+        if (Array.isArray(remoteCalls)) {
+          setWaiterCalls(prev => {
+            const prevIds = new Set(prev.map(c => c.id));
+            const hasNew = remoteCalls.some(c => !prevIds.has(c.id));
+            if (hasNew && !isCustomerRoute) {
+              playKitchenChime();
+            }
+            return remoteCalls;
+          });
+        }
+      } catch {}
+    };
+
+    pollSupabase();
+    const interval = setInterval(pollSupabase, 2500);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      window.removeEventListener('storage', handleStorageChange);
+      try { broadcast?.close(); } catch {}
+      try { if (supabaseChannel) supabase.removeChannel(supabaseChannel); } catch {}
+    };
+  }, [activeRestaurant.id, activeRestaurant.slug, activeRestaurantId, isCustomerRoute, ownerSession]);
+
+  // Persist restaurants
+  useEffect(() => {
+    saveStoredRestaurants(restaurants);
+  }, [restaurants]);
+
+  // Persist orders
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(orders));
+    } catch (e) {
+      console.warn('Orders storage write error', e);
+    }
+  }, [orders]);
+
 
   const showNotification = (msg: string) => {
     setNotificationMsg(msg);
@@ -656,6 +817,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showNotification('Table removed');
   };
 
+  const simulateNfcTap = (tableNumber: string) => {
+    setCurrentTable(tableNumber);
+    setIsNfcSource(true);
+    setCurrentView('flipbook');
+    showNotification(`⚡ Smart Card tapped for ${tableNumber}`);
+  };
+
   // Cart & Ordering
   const addToCart = (item: FoodItem, notes?: string, qty: number = 1) => {
     setCart(prev => {
@@ -699,48 +867,109 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const total = cart.reduce((sum, ci) => sum + ci.foodItem.price * ci.quantity, 0);
     const orderTable = currentTable || 'Table 1';
 
+    let targetRestaurantId = activeRestaurant.id;
+    if (!targetRestaurantId && requestedSlug) {
+      const match = restaurants.find(r => r.slug.toLowerCase() === requestedSlug.toLowerCase());
+      if (match?.id) targetRestaurantId = match.id;
+    }
+    if (!targetRestaurantId && restaurants.length > 0) {
+      targetRestaurantId = restaurants[0].id;
+    }
+
+    const uniqueId = `ord-${Date.now().toString().slice(-5)}-${Math.floor(Math.random() * 89 + 10)}`;
     const newOrder: Order = {
-      id: `ord-${Date.now().toString().slice(-4)}`,
-      restaurantId: activeRestaurant.id,
+      id: uniqueId,
+      restaurantId: targetRestaurantId,
       tableNumber: orderTable,
       customerName: customerName.trim() || `Diner at ${orderTable}`,
       items: [...cart],
       total,
       status: 'pending',
-      createdAt: 'Just now',
+      createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       source: isNfcSource ? 'nfc' : 'qr'
     };
 
-    setOrders(prev => [newOrder, ...prev]);
+    setOrders(prev => [newOrder, ...prev.filter(o => o.id !== newOrder.id)]);
     clearCart();
     playKitchenChime();
+
+    // Broadcast cross-tab instantly
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('tapmenu_live_sync');
+        bc.postMessage({ type: 'NEW_ORDER', order: newOrder });
+        bc.close();
+      }
+    } catch {}
+
+    // Persist to Supabase
     syncOrderToSupabase(newOrder);
-    showNotification(`🎉 Order sent to ${activeRestaurant.name}'s kitchen from ${orderTable}!`);
+
+    showNotification(`🎉 Order sent to ${activeRestaurant.name || 'kitchen'} from ${orderTable}!`);
     return newOrder;
   };
 
   const callWaiter = (reason: WaiterCall['reason']) => {
     const tableNum = currentTable || 'Table 1';
+
+    let targetRestaurantId = activeRestaurant.id;
+    if (!targetRestaurantId && requestedSlug) {
+      const match = restaurants.find(r => r.slug.toLowerCase() === requestedSlug.toLowerCase());
+      if (match?.id) targetRestaurantId = match.id;
+    }
+    if (!targetRestaurantId && restaurants.length > 0) {
+      targetRestaurantId = restaurants[0].id;
+    }
+
+    const uniqueCallId = `call-${Date.now().toString().slice(-5)}-${Math.floor(Math.random() * 89 + 10)}`;
     const newCall: WaiterCall = {
-      id: `call-${Date.now()}`,
-      restaurantId: activeRestaurant.id,
+      id: uniqueCallId,
+      restaurantId: targetRestaurantId,
       tableNumber: tableNum,
       reason,
-      timestamp: 'Just now',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       status: 'active'
     };
-    setWaiterCalls(prev => [newCall, ...prev]);
+
+    setWaiterCalls(prev => [newCall, ...prev.filter(c => c.id !== newCall.id)]);
+
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('tapmenu_live_sync');
+        bc.postMessage({ type: 'NEW_WAITER_CALL', call: newCall });
+        bc.close();
+      }
+    } catch {}
+
     syncWaiterCallToSupabase(newCall);
     showNotification(`🔔 Waiter buzzed for ${tableNum}: ${reason}`);
   };
 
   const resolveWaiterCall = (id: string) => {
     setWaiterCalls(prev => prev.filter(c => c.id !== id));
+
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('tapmenu_live_sync');
+        bc.postMessage({ type: 'WAITER_CALL_RESOLVED', callId: id });
+        bc.close();
+      }
+    } catch {}
+
     resolveWaiterCallInSupabase(id);
   };
 
   const updateOrderStatus = (orderId: string, status: Order['status']) => {
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('tapmenu_live_sync');
+        bc.postMessage({ type: 'ORDER_STATUS_UPDATE', orderId, status });
+        bc.close();
+      }
+    } catch {}
+
     updateOrderStatusInSupabase(orderId, status);
     showNotification(`Order marked as ${status}`);
   };
@@ -800,6 +1029,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteTable,
         updateTableStatus,
         replaceDamagedTag,
+        simulateNfcTap,
         addToCart,
         updateCartItemQuantity,
         removeFromCart,

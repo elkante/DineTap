@@ -438,19 +438,24 @@ export async function loginRestaurantOwner(
 export async function syncOrderToSupabase(order: Order): Promise<boolean> {
   if (!supabase) return false;
   try {
-    const { error } = await supabase.from('orders').insert([
-      {
-        id: order.id,
-        restaurant_id: order.restaurantId,
-        table_number: order.tableNumber,
-        customer_name: order.customerName,
-        items: order.items,
-        total: order.total,
-        status: order.status,
-        payment_method: 'pos',
-        source: order.source,
-      },
-    ]);
+    if (!order.restaurantId) {
+      console.warn('Cannot sync order without restaurantId');
+      return false;
+    }
+
+    // Clean payload matching exact Supabase orders table schema
+    const basePayload: Record<string, any> = {
+      id: order.id,
+      restaurant_id: order.restaurantId,
+      table_number: order.tableNumber || 'Table 1',
+      customer_name: order.customerName || 'Guest Diner',
+      items: order.items || [],
+      total: Number(order.total) || 0,
+      status: order.status || 'pending',
+      source: order.source || 'qr',
+    };
+
+    const { error } = await supabase.from('orders').insert([basePayload]);
 
     if (error) {
       console.warn('Supabase order sync notice:', error.message);
@@ -469,6 +474,11 @@ export async function syncOrderToSupabase(order: Order): Promise<boolean> {
 export async function syncWaiterCallToSupabase(call: WaiterCall): Promise<boolean> {
   if (!supabase) return false;
   try {
+    if (!call.restaurantId) {
+      console.warn('Cannot sync waiter call without restaurantId');
+      return false;
+    }
+
     const { error } = await supabase.from('waiter_calls').insert([
       {
         id: call.id,
@@ -493,14 +503,16 @@ export async function syncWaiterCallToSupabase(call: WaiterCall): Promise<boolea
 /**
  * Fetch orders for a restaurant from Supabase
  */
-export async function fetchOrdersFromSupabase(restaurantId: string): Promise<Order[]> {
-  if (!supabase) return [];
+export async function fetchOrdersFromSupabase(restaurantId: string, slug?: string): Promise<Order[]> {
+  if (!supabase || !restaurantId) return [];
   try {
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('restaurant_id', restaurantId)
-      .order('created_at', { ascending: false });
+    let query = supabase.from('orders').select('*');
+    if (slug && slug !== restaurantId) {
+      query = query.or(`restaurant_id.eq.${restaurantId},restaurant_id.eq.${slug}`);
+    } else {
+      query = query.eq('restaurant_id', restaurantId);
+    }
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (data && !error) {
       return data.map(row => ({
@@ -524,13 +536,16 @@ export async function fetchOrdersFromSupabase(restaurantId: string): Promise<Ord
 /**
  * Fetch waiter buzzer calls from Supabase
  */
-export async function fetchWaiterCallsFromSupabase(restaurantId: string): Promise<WaiterCall[]> {
-  if (!supabase) return [];
+export async function fetchWaiterCallsFromSupabase(restaurantId: string, slug?: string): Promise<WaiterCall[]> {
+  if (!supabase || !restaurantId) return [];
   try {
-    const { data, error } = await supabase
-      .from('waiter_calls')
-      .select('*')
-      .eq('restaurant_id', restaurantId)
+    let query = supabase.from('waiter_calls').select('*');
+    if (slug && slug !== restaurantId) {
+      query = query.or(`restaurant_id.eq.${restaurantId},restaurant_id.eq.${slug}`);
+    } else {
+      query = query.eq('restaurant_id', restaurantId);
+    }
+    const { data, error } = await query
       .eq('status', 'active')
       .order('timestamp', { ascending: false });
 

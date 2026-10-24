@@ -40,7 +40,8 @@ import {
   Sparkles,
   Eye,
   Save,
-  RotateCcw
+  RotateCcw,
+  AlertCircle
 } from 'lucide-react';
 
 // Cryptographic Salt & Precomputed SHA-256 Hashes

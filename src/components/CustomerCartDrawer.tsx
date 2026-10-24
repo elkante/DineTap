@@ -41,7 +41,7 @@ export const CustomerCartDrawer: React.FC<{ isOpen: boolean; onClose: () => void
 
   const handleCheckout = (e: React.FormEvent) => {
     e.preventDefault();
-    const newOrder = placeOrder(customerName || 'Diner at ' + (currentTable || 'Table 01'));
+    const newOrder = placeOrder(customerName || 'Diner at ' + (currentTable || 'Table 01'), paymentChoice);
     if (newOrder) {
       setOrderPlacedSuccess(newOrder.id);
     }
