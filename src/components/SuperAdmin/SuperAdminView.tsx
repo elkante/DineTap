@@ -7,7 +7,8 @@ import {
   deleteRestaurantFromSupabase,
   updateRestaurantPlanInSupabase,
   setActiveSession,
-  registerRestaurant 
+  registerRestaurant,
+  supabase
 } from '../../utils/supabase';
 import { 
   getStoredPlans, 
@@ -41,18 +42,40 @@ import {
   RotateCcw
 } from 'lucide-react';
 
-const ADMIN_MASTER_PIN = 'tapmenu2026';
-const PIN_SESSION_KEY = 'tapmenu_admin_unlocked';
+// Cryptographic Salt & Precomputed SHA-256 Hashes
+// (The plain-text passcodes never exist in source code or client JS bundles)
+const PASSCODE_SALT = 'tapmenu_salt_2026_x9';
+const VALID_HASHES = [
+  '56101a6eebd4fafbe3defe7901bfcaebc67c4347654ce45f68e4bbcc41f42113', // primary hash
+  '2c0b5d2dd923a8005745f5034338ab93f2f8a73fe9661f4c21c9e76bd55fefb9'  // legacy fallback hash
+];
+
+async function computeSha256(text: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(text);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+const SESSION_TOKEN_KEY = 'tapmenu_admin_session_sig';
+const SESSION_TIME_KEY = 'tapmenu_admin_session_ts';
+const SESSION_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes auto-timeout
+const LOCKOUT_KEY = 'tapmenu_admin_lockout_ts';
+const ATTEMPTS_KEY = 'tapmenu_admin_failed_attempts';
 
 export const SuperAdminView: React.FC = () => {
   const { showNotification } = useApp();
 
-  // Master PIN Gate
-  const [isUnlocked, setIsUnlocked] = useState<boolean>(() => {
-    return sessionStorage.getItem(PIN_SESSION_KEY) === 'true';
-  });
+  // Authentication State
+  const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
+  const [authMode, setAuthMode] = useState<'passcode' | 'supabase'>('passcode');
   const [pinInput, setPinInput] = useState('');
-  const [pinError, setPinError] = useState(false);
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [lockoutSeconds, setLockoutSeconds] = useState<number>(0);
 
   // Data
   const [tenants, setTenants] = useState<RestaurantTenant[]>([]);
@@ -72,34 +95,143 @@ export const SuperAdminView: React.FC = () => {
   const [newPassword, setNewPassword] = useState('pass1234');
   const [newPlan, setNewPlan] = useState<'Basic' | 'Standard' | 'Premium' | 'Enterprise'>('Standard');
 
-  const loadAllTenants = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchAllRestaurantsFromSupabase();
-      setTenants(data);
-    } catch (e) {
-      console.warn('Failed to load tenants', e);
-    } finally {
-      setLoading(false);
+  // Verify cryptographic session on load
+  useEffect(() => {
+    const verifyStoredSession = async () => {
+      const ts = sessionStorage.getItem(SESSION_TIME_KEY);
+      const sig = sessionStorage.getItem(SESSION_TOKEN_KEY);
+      if (!ts || !sig) {
+        setIsUnlocked(false);
+        return;
+      }
+      const age = Date.now() - parseInt(ts, 10);
+      if (isNaN(age) || age < 0 || age > SESSION_MAX_AGE_MS) {
+        sessionStorage.removeItem(SESSION_TOKEN_KEY);
+        sessionStorage.removeItem(SESSION_TIME_KEY);
+        setIsUnlocked(false);
+        return;
+      }
+      const expectedSig = await computeSha256(ts + PASSCODE_SALT + 'authenticated_super_admin');
+      if (sig === expectedSig) {
+        setIsUnlocked(true);
+      } else {
+        sessionStorage.removeItem(SESSION_TOKEN_KEY);
+        sessionStorage.removeItem(SESSION_TIME_KEY);
+        setIsUnlocked(false);
+      }
+    };
+
+    // Check lockout on load
+    const lockoutUntil = Number(sessionStorage.getItem(LOCKOUT_KEY) || 0);
+    const remaining = Math.ceil((lockoutUntil - Date.now()) / 1000);
+    if (remaining > 0) {
+      setLockoutSeconds(remaining);
+      setAuthError(`Security lockout active. Try again in ${remaining}s.`);
+    }
+
+    verifyStoredSession();
+  }, []);
+
+  // Lockout countdown timer
+  useEffect(() => {
+    if (lockoutSeconds <= 0) return;
+    const interval = setInterval(() => {
+      setLockoutSeconds(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          sessionStorage.removeItem(LOCKOUT_KEY);
+          sessionStorage.removeItem(ATTEMPTS_KEY);
+          setAuthError(null);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutSeconds]);
+
+  const recordFailedAttempt = () => {
+    const attempts = Number(sessionStorage.getItem(ATTEMPTS_KEY) || 0) + 1;
+    sessionStorage.setItem(ATTEMPTS_KEY, String(attempts));
+    if (attempts >= 4) {
+      const lockoutUntil = Date.now() + 5 * 60 * 1000; // 5 min lockout
+      sessionStorage.setItem(LOCKOUT_KEY, String(lockoutUntil));
+      setLockoutSeconds(300);
+      setAuthError('Too many failed attempts. Security lockout active for 5 minutes.');
+    } else {
+      setAuthError(`Access Denied: Invalid credentials. (${4 - attempts} attempt${4 - attempts !== 1 ? 's' : ''} left before lockout)`);
     }
   };
 
-  useEffect(() => {
-    if (isUnlocked) {
-      loadAllTenants();
-    }
-  }, [isUnlocked]);
+  const createAuthorizedSession = async () => {
+    const now = Date.now().toString();
+    const sig = await computeSha256(now + PASSCODE_SALT + 'authenticated_super_admin');
+    sessionStorage.setItem(SESSION_TIME_KEY, now);
+    sessionStorage.setItem(SESSION_TOKEN_KEY, sig);
+    sessionStorage.removeItem(ATTEMPTS_KEY);
+    sessionStorage.removeItem(LOCKOUT_KEY);
+    setIsUnlocked(true);
+    setAuthError(null);
+  };
 
-  const handleUnlock = (e: React.FormEvent) => {
+  const handlePasscodeUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanPin = pinInput.trim().toLowerCase();
-    if (cleanPin === ADMIN_MASTER_PIN || cleanPin === 'dinetap2026') {
-      setIsUnlocked(true);
-      sessionStorage.setItem(PIN_SESSION_KEY, 'true');
-      setPinError(false);
-    } else {
-      setPinError(true);
+    if (lockoutSeconds > 0) return;
+    setIsAuthenticating(true);
+    setAuthError(null);
+
+    try {
+      const clean = pinInput.trim().toLowerCase();
+      const hash = await computeSha256(PASSCODE_SALT + clean);
+      if (VALID_HASHES.includes(hash)) {
+        await createAuthorizedSession();
+        setPinInput('');
+        showNotification('Super-Admin identity verified.');
+      } else {
+        recordFailedAttempt();
+      }
+    } catch {
+      recordFailedAttempt();
+    } finally {
+      setIsAuthenticating(false);
     }
+  };
+
+  const handleSupabaseUnlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (lockoutSeconds > 0) return;
+    if (!supabase) {
+      setAuthError('Supabase is not configured.');
+      return;
+    }
+    setIsAuthenticating(true);
+    setAuthError(null);
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: adminEmail.trim(),
+        password: adminPassword,
+      });
+
+      if (error || !data?.user) {
+        recordFailedAttempt();
+      } else {
+        await createAuthorizedSession();
+        setAdminPassword('');
+        showNotification(`Welcome, ${data.user.email}! Super-Admin identity verified.`);
+      }
+    } catch {
+      recordFailedAttempt();
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  const handleLock = () => {
+    sessionStorage.removeItem(SESSION_TOKEN_KEY);
+    sessionStorage.removeItem(SESSION_TIME_KEY);
+    setIsUnlocked(false);
+    showNotification('Super-Admin locked.');
   };
 
   const handleNameChange = (val: string) => {
@@ -220,48 +352,136 @@ export const SuperAdminView: React.FC = () => {
     showNotification('Reset pricing plans to platform defaults.');
   };
 
-  // If locked, render Master PIN access screen
+  // If locked, render Secure Access Screen
   if (!isUnlocked) {
     return (
-      <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center p-4 font-sans">
-        <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl">
+      <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center p-4 font-sans select-none">
+        <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl relative">
           <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-4">
             <Lock className="w-7 h-7" />
           </div>
 
           <h1 className="text-xl font-extrabold text-white">Platform Super Admin</h1>
-          <p className="text-xs text-neutral-400 mt-1 mb-6">
-            Enter your master passcode to manage all TapMenu restaurants, subscriptions, and hardware.
+          <p className="text-xs text-neutral-400 mt-1 mb-5">
+            Encrypted Administrative Master Control
           </p>
 
-          <form onSubmit={handleUnlock} className="space-y-4">
-            <div>
-              <input
-                type="password"
-                required
-                value={pinInput}
-                onChange={(e) => setPinInput(e.target.value)}
-                placeholder="Enter Master PIN (tapmenu2026)"
-                className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-xl text-center text-sm font-mono text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400"
-              />
-              {pinError && (
-                <p className="text-red-400 text-xs mt-1.5 font-medium">
-                  Invalid passcode. Try "tapmenu2026"
-                </p>
-              )}
-            </div>
-
+          {/* Auth Mode Toggle Tabs */}
+          <div className="grid grid-cols-2 gap-1.5 p-1 bg-neutral-950 border border-neutral-800 rounded-xl mb-5 text-xs font-bold">
             <button
-              type="submit"
-              className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold rounded-xl text-xs transition-colors shadow-md"
+              type="button"
+              onClick={() => { setAuthMode('passcode'); setAuthError(null); }}
+              className={`py-1.5 rounded-lg transition-colors ${
+                authMode === 'passcode'
+                  ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
             >
-              Unlock Admin Portal
+              Master Key
             </button>
-          </form>
+            <button
+              type="button"
+              onClick={() => { setAuthMode('supabase'); setAuthError(null); }}
+              className={`py-1.5 rounded-lg transition-colors ${
+                authMode === 'supabase'
+                  ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              Supabase Auth
+            </button>
+          </div>
 
-          <div className="mt-6 pt-4 border-t border-neutral-800">
-            <a href="/" className="text-xs text-neutral-500 hover:text-neutral-300">
-              ← Return to TapMenu
+          {/* Error / Lockout Alert */}
+          {authError && (
+            <div className="p-3 mb-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs text-left">
+              <div className="font-bold flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                <span>Security Notice</span>
+              </div>
+              <div className="mt-1 text-[11px] leading-tight">
+                {authError}
+              </div>
+            </div>
+          )}
+
+          {/* Form 1: Master Passcode */}
+          {authMode === 'passcode' && (
+            <form onSubmit={handlePasscodeUnlock} className="space-y-4">
+              <div>
+                <input
+                  type="password"
+                  required
+                  autoFocus
+                  disabled={lockoutSeconds > 0 || isAuthenticating}
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  placeholder="Enter Master Security Key"
+                  className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-xl text-center text-sm font-mono text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={lockoutSeconds > 0 || isAuthenticating || !pinInput.trim()}
+                className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold rounded-xl text-xs transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isAuthenticating ? 'Verifying Cryptographic Hash...' : lockoutSeconds > 0 ? `Locked (${lockoutSeconds}s)` : 'Verify Master Key'}
+              </button>
+            </form>
+          )}
+
+          {/* Form 2: Direct Supabase Admin Auth */}
+          {authMode === 'supabase' && (
+            <form onSubmit={handleSupabaseUnlock} className="space-y-3 text-left">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">
+                  Admin Email
+                </label>
+                <input
+                  type="email"
+                  required
+                  autoFocus
+                  disabled={lockoutSeconds > 0 || isAuthenticating}
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  placeholder="admin@tapmenu.com"
+                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-xl text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400 disabled:opacity-50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-1">
+                  Admin Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  disabled={lockoutSeconds > 0 || isAuthenticating}
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-xl text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400 disabled:opacity-50"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={lockoutSeconds > 0 || isAuthenticating || !adminEmail.trim() || !adminPassword}
+                className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold rounded-xl text-xs transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+              >
+                {isAuthenticating ? 'Authenticating with Supabase...' : lockoutSeconds > 0 ? `Locked (${lockoutSeconds}s)` : 'Sign In via Supabase'}
+              </button>
+            </form>
+          )}
+
+          <div className="mt-5 pt-4 border-t border-neutral-800 text-[11px] text-neutral-500 flex items-center justify-between">
+            <span className="flex items-center gap-1 text-[10px]">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span>SHA-256 Protected</span>
+            </span>
+            <a href="/" className="hover:text-neutral-300">
+              ← Return Home
             </a>
           </div>
         </div>
@@ -293,10 +513,7 @@ export const SuperAdminView: React.FC = () => {
 
           <div className="flex items-center gap-2 sm:gap-3 text-xs">
             <button
-              onClick={() => {
-                sessionStorage.removeItem(PIN_SESSION_KEY);
-                setIsUnlocked(false);
-              }}
+              onClick={handleLock}
               className="px-3 py-1.5 text-neutral-400 hover:text-white transition-colors"
             >
               Lock
@@ -608,31 +825,31 @@ export const SuperAdminView: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
                 <div className="p-4 bg-neutral-950 rounded-xl border border-neutral-800">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-white text-xs">A6 Acrylic T-Stand</span>
-                    <span className="font-mono text-amber-400 font-bold">₦45,000 / 10pk</span>
+                    <span className="font-bold text-white text-xs">Plain White Digital Card</span>
+                    <span className="font-mono text-amber-400 font-bold">₦7,000 / card</span>
                   </div>
                   <p className="text-[11px] text-neutral-400">
-                    Double-sided UV printing with embedded digital NFC chip. Shomolu local print hub.
+                    High-grade waterproof digital card with scannable QR. Cost: ₦1,600 &middot; <strong className="text-emerald-400">₦5,400 profit per table</strong>.
                   </p>
                 </div>
 
                 <div className="p-4 bg-neutral-950 rounded-xl border border-neutral-800">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-white text-xs">Epoxy Waterproof Discs</span>
-                    <span className="font-mono text-amber-400 font-bold">₦25,000 / 25pk</span>
+                    <span className="font-bold text-white text-xs">Custom Logo / Branded Card</span>
+                    <span className="font-mono text-amber-400 font-bold">₦11,000 / card</span>
                   </div>
                   <p className="text-[11px] text-neutral-400">
-                    Adhesive round pucks for outdoor tables, bar counters, and patio tables.
+                    ₦7k base + ₦4k custom full-color logo / restaurant artwork UV printing. <strong className="text-emerald-400">₦7,500+ profit per table</strong>.
                   </p>
                 </div>
 
                 <div className="p-4 bg-neutral-950 rounded-xl border border-neutral-800">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-white text-xs">Laser Etched Hardwood</span>
-                    <span className="font-mono text-amber-400 font-bold">₦75,000 / 10pk</span>
+                    <span className="font-bold text-white text-xs">Heavy Clear Acrylic Stand</span>
+                    <span className="font-mono text-amber-400 font-bold">₦3,500 / stand</span>
                   </div>
                   <p className="text-[11px] text-neutral-400">
-                    Solid mahogany / oak wood stands for ultra-luxury steak houses and VIP lounges.
+                    Crystal-clear tabletop display standee holds the smart card upright and spill-proof for high-turn dining tables.
                   </p>
                 </div>
               </div>
