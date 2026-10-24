@@ -22,20 +22,31 @@ import {
 import { registerRestaurant, loginRestaurantOwner } from '../../utils/supabase';
 import { useApp } from '../../context/AppContext';
 
-const COLOR_PRESETS = [
-  { name: 'Emerald Leather', hex: '#0c2e22', border: '#D4AF37', label: 'The Corner Table' },
-  { name: 'Burgundy Wine', hex: '#4a0e17', border: '#D4AF37', label: 'Classic Luxury' },
-  { name: 'Midnight Navy', hex: '#0f172a', border: '#eab308', label: 'Modern Lounge' },
-  { name: 'Espresso Leather', hex: '#2b1810', border: '#f59e0b', label: 'Steakhouse' },
-  { name: 'Warm Terracotta', hex: '#7c2d12', border: '#f59e0b', label: 'Mediterranean' },
-  { name: 'Charcoal Slate', hex: '#1f2421', border: '#d97706', label: 'Urban Bistro' },
-];
-
 export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPricing }) => {
   const { showNotification } = useApp();
   const [authModal, setAuthModal] = useState<'signup' | 'login' | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Secret 6-tap easter egg for platform super admin (/sys-hq)
+  const [logoTaps, setLogoTaps] = useState(0);
+  const [lastTapTime, setLastTapTime] = useState(0);
+
+  const handleLogoTap = () => {
+    const now = Date.now();
+    if (now - lastTapTime > 3000) {
+      setLogoTaps(1);
+    } else {
+      const next = logoTaps + 1;
+      if (next >= 6) {
+        setLogoTaps(0);
+        window.location.href = '/sys-hq';
+        return;
+      }
+      setLogoTaps(next);
+    }
+    setLastTapTime(now);
+  };
 
   // Signup fields
   const [name, setName] = useState('');
@@ -43,8 +54,7 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [currency, setCurrency] = useState('₦');
-  const [chosenColor, setChosenColor] = useState('#0c2e22');
-  const [previewColor, setPreviewColor] = useState('#0c2e22');
+  const [chosenColor] = useState('#0c2e22');
 
   // Login fields
   const [loginEmail, setLoginEmail] = useState('');
@@ -109,65 +119,72 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-stone-900 font-sans selection:bg-amber-200 selection:text-amber-950">
-      {/* Top Navbar */}
-      <nav className="border-b border-stone-200/80 sticky top-0 z-40 bg-[#FAF7F2]/90 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-4 h-16 sm:h-20 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-[#0c2e22] text-[#D4AF37] flex items-center justify-center font-serif font-black text-xl shadow-md border border-[#D4AF37]/40">
+    <div className="min-h-screen bg-[#FAF7F2] text-stone-900 font-sans selection:bg-amber-200 selection:text-amber-950 overflow-x-hidden">
+      {/* Top Navbar: Modern, Ultra-clean & Mobile-first */}
+      <nav className="border-b border-stone-200/80 sticky top-0 z-40 bg-[#FAF7F2]/95 backdrop-blur-md">
+        <div className="max-w-6xl mx-auto px-3.5 sm:px-6 h-14 sm:h-18 flex items-center justify-between gap-2 sm:gap-4">
+          {/* Logo with secret 6-tap easter egg to /sys-hq */}
+          <button 
+            onClick={handleLogoTap}
+            type="button"
+            className="flex items-center gap-2 sm:gap-2.5 text-left focus:outline-none select-none active:scale-95 transition-transform"
+            title="DineTap"
+          >
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-[#0c2e22] text-[#D4AF37] flex items-center justify-center font-serif font-black text-base sm:text-xl shadow-md border border-[#D4AF37]/40 shrink-0">
               D
             </div>
-            <div>
-              <span className="font-serif font-extrabold text-xl tracking-tight text-stone-900">DineTap</span>
-              <span className="text-[10px] block text-amber-800 font-mono -mt-1 uppercase tracking-wider font-bold">Luxury Digital Menus</span>
+            <div className="min-w-0">
+              <span className="font-serif font-extrabold text-base sm:text-xl tracking-tight text-stone-900 block leading-tight">DineTap</span>
+              <span className="text-[9px] sm:text-[10px] block text-amber-800 font-mono uppercase tracking-wider font-bold truncate">Luxury Menus</span>
             </div>
-          </div>
+          </button>
 
-          <div className="flex items-center gap-2 sm:gap-3 text-xs">
+          {/* Nav Actions */}
+          <div className="flex items-center gap-1 sm:gap-3 text-xs">
             <button
               onClick={() => onOpenPricing ? onOpenPricing() : (window.location.search = '?page=pricing')}
-              className="px-3 py-2 text-stone-700 hover:text-stone-950 font-bold transition-colors"
+              className="px-2.5 sm:px-3.5 py-1.5 text-stone-700 hover:text-stone-950 font-bold transition-colors"
             >
               Pricing
             </button>
             <button
               onClick={() => { setAuthModal('login'); setErrorMsg(null); }}
-              className="px-4 py-2 text-stone-700 hover:text-stone-950 font-bold transition-colors"
+              className="px-2.5 sm:px-3.5 py-1.5 text-stone-700 hover:text-stone-950 font-bold transition-colors"
             >
               Sign In
             </button>
             <button
               onClick={() => { setAuthModal('signup'); setErrorMsg(null); }}
-              className="px-5 py-2.5 bg-[#0c2e22] hover:bg-[#124231] text-[#D4AF37] font-bold rounded-xl transition-all shadow-md active:scale-95 border border-[#D4AF37]/30"
+              className="px-3 sm:px-5 py-2 sm:py-2.5 bg-[#0c2e22] hover:bg-[#124231] text-[#D4AF37] font-bold rounded-xl transition-all shadow-md active:scale-95 border border-[#D4AF37]/30 text-xs whitespace-nowrap"
             >
-              Create Menu Free
+              <span className="hidden xs:inline">Create Menu </span>Free
             </button>
           </div>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section className="max-w-6xl mx-auto px-4 pt-12 sm:pt-20 pb-16 text-center">
+      <section className="max-w-6xl mx-auto px-4 pt-8 sm:pt-16 pb-12 sm:pb-16 text-center">
         {/* Luxury Badge */}
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-stone-300/80 text-[11px] font-bold text-amber-900 mb-6 shadow-sm">
-          <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
-          <span>Interactive Luxury Flipbook Menus &middot; NTAG213 NFC &middot; Direct Table Ordering</span>
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-stone-300/80 text-[10px] sm:text-[11px] font-bold text-amber-900 mb-5 shadow-xs max-w-full truncate">
+          <Sparkles className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
+          <span className="truncate">Digital Smart Cards &bull; Instant QR &bull; Direct Table Orders</span>
         </div>
 
         {/* Main Headline */}
-        <h1 className="font-serif text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight max-w-4xl mx-auto leading-[1.15] text-stone-900">
+        <h1 className="font-serif text-2xl xs:text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight max-w-4xl mx-auto leading-[1.18] sm:leading-[1.15] text-stone-900">
           Turn Your Dining Tables into <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-700 via-amber-600 to-amber-800 italic">Luxury Digital Books</span> & Direct Orders.
         </h1>
 
-        <p className="text-sm sm:text-lg text-stone-600 max-w-2xl mx-auto mt-6 leading-relaxed">
-          Zero app downloads for diners. Customers tap an NFC tag or scan table QR code, browse a realistic leather-bound flipbook menu, and order straight to your kitchen.
+        <p className="text-xs sm:text-base md:text-lg text-stone-600 max-w-2xl mx-auto mt-4 sm:mt-6 leading-relaxed">
+          Zero app downloads for diners. Customers tap an NFC card or scan table QR code, browse a realistic leather-bound flipbook menu, and order straight to your kitchen.
         </p>
 
         {/* CTA Buttons */}
-        <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3.5 max-w-md mx-auto">
+        <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-3.5 max-w-md mx-auto w-full">
           <button
             onClick={() => { setAuthModal('signup'); setErrorMsg(null); }}
-            className="w-full sm:w-auto px-7 py-4 bg-[#0c2e22] hover:bg-[#124231] text-[#D4AF37] font-bold rounded-2xl text-sm transition-all shadow-xl shadow-stone-900/10 flex items-center justify-center gap-2 active:scale-95 border border-[#D4AF37]/35"
+            className="w-full sm:w-auto px-7 py-3.5 sm:py-4 bg-[#0c2e22] hover:bg-[#124231] text-[#D4AF37] font-bold rounded-2xl text-xs sm:text-sm transition-all shadow-xl shadow-stone-900/10 flex items-center justify-center gap-2 active:scale-95 border border-[#D4AF37]/35"
           >
             <span>Create Your Restaurant Menu</span>
             <ArrowRight className="w-4 h-4" />
@@ -175,112 +192,88 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
 
           <button
             onClick={() => { setAuthModal('login'); setErrorMsg(null); }}
-            className="w-full sm:w-auto px-6 py-4 bg-white hover:bg-stone-50 text-stone-800 font-bold rounded-2xl text-sm border border-stone-300 transition-colors shadow-xs"
+            className="w-full sm:w-auto px-6 py-3.5 sm:py-4 bg-white hover:bg-stone-50 text-stone-800 font-bold rounded-2xl text-xs sm:text-sm border border-stone-300 transition-colors shadow-xs"
           >
             Restaurant Portal Login
           </button>
         </div>
 
         {/* Value Prop Badges */}
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-xs text-stone-600 font-medium">
-          <div className="flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+        <div className="mt-8 sm:mt-10 flex flex-wrap items-center justify-center gap-3 sm:gap-6 text-[11px] sm:text-xs text-stone-600 font-medium">
+          <div className="flex items-center gap-1.5 bg-white/70 sm:bg-transparent px-2.5 py-1 sm:p-0 rounded-lg border border-stone-200 sm:border-0">
+            <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" />
             <span>100% Direct Table Payments (POS / Cash)</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          <div className="flex items-center gap-1.5 bg-white/70 sm:bg-transparent px-2.5 py-1 sm:p-0 rounded-lg border border-stone-200 sm:border-0">
+            <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" />
             <span>Custom Slug & Signature Book Color</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          <div className="flex items-center gap-1.5 bg-white/70 sm:bg-transparent px-2.5 py-1 sm:p-0 rounded-lg border border-stone-200 sm:border-0">
+            <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" />
             <span>Zero 3rd-Party Payment Withholding</span>
           </div>
         </div>
 
         {/* ========================================================================= */}
-        {/* INTERACTIVE LUXURY MENU BOOK PREVIEW WITH COLOR PALETTE SWITCHER */}
+        {/* HERO SHOWCASE IMAGE: LUXURY DIGITAL DINING EXPERIENCE */}
         {/* ========================================================================= */}
-        <div className="mt-16 max-w-4xl mx-auto">
-          <div className="bg-stone-100/70 border border-stone-200/90 rounded-3xl p-6 sm:p-10 shadow-xl relative overflow-hidden">
-            {/* Header info */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 mb-6 pb-4 border-b border-stone-200">
-              <div className="text-center sm:text-left">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800 block">Realistic 3D Flipbook Experience</span>
-                <span className="text-sm font-bold text-stone-800">What diners see on their phones when scanning table cards:</span>
-              </div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#0c2e22]/10 border border-[#D4AF37]/40 text-[#0c2e22] rounded-full text-xs font-bold">
-                <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
-                <span>Custom Leather & Colors in Dashboard</span>
-              </div>
+        <div className="mt-10 sm:mt-14 max-w-5xl mx-auto">
+          <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border-2 border-amber-900/15 bg-stone-950 group">
+            {/* High-res luxury restaurant dining photography */}
+            <div className="relative aspect-[16/10] sm:aspect-[21/10] w-full overflow-hidden">
+              <img
+                src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1600&q=85"
+                alt="Luxury Dining Experience with DineTap Digital Menus"
+                className="w-full h-full object-cover object-center transform transition-transform duration-700 group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/40 to-transparent" />
             </div>
 
-            {/* The Luxury Book Graphic */}
-            <div className="flex items-center justify-center py-4">
-              <div 
-                className="w-full max-w-xs sm:max-w-sm h-[440px] sm:h-[500px] rounded-[28px] p-4 relative shadow-2xl transition-colors duration-500 flex flex-col justify-between text-center select-none"
-                style={{
-                  backgroundColor: previewColor,
-                  boxShadow: '0 25px 50px -12px rgba(0,0,0,0.45), 2px 2px 0 #ede8db, 4px 4px 0 #e0d9c8, 6px 6px 0 #d5ccb8',
-                  border: '2px solid rgba(212, 175, 55, 0.45)'
-                }}
-              >
-                {/* Book Spine Shadow on Left */}
-                <div 
-                  className="absolute top-3 bottom-3 left-2 w-5 z-20 pointer-events-none rounded-l-md"
-                  style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 60%, transparent 100%)' }}
-                />
+            {/* Overlaid Badges & Interactive Highlights */}
+            <div className="absolute inset-0 p-3 sm:p-6 md:p-8 flex flex-col justify-between pointer-events-none">
+              {/* Top Bar Highlights */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-stone-900/90 backdrop-blur-md border border-[#D4AF37]/50 text-[#D4AF37] text-[9px] sm:text-xs font-bold shadow-lg">
+                  <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  <span>Interactive Luxury Folio &bull; Instant Tap</span>
+                </div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-black/70 backdrop-blur-md border border-white/20 text-white text-[9px] sm:text-[11px] font-medium">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Live KDS Kitchen Network</span>
+                </div>
+              </div>
 
-                {/* Stitched Gold Perimeter */}
-                <div className="absolute inset-3 border-2 border-dashed border-[#D4AF37]/55 rounded-2xl pointer-events-none z-10" />
-
-                {/* Brass Corner Braces in 4 corners */}
-                <div className="absolute top-2.5 left-2.5 w-6 h-6 border-t-2 border-l-2 border-[#D4AF37] rounded-tl-lg pointer-events-none z-20" />
-                <div className="absolute top-2.5 right-2.5 w-6 h-6 border-t-2 border-r-2 border-[#D4AF37] rounded-tr-lg pointer-events-none z-20" />
-                <div className="absolute bottom-2.5 left-2.5 w-6 h-6 border-b-2 border-l-2 border-[#D4AF37] rounded-bl-lg pointer-events-none z-20" />
-                <div className="absolute bottom-2.5 right-2.5 w-6 h-6 border-b-2 border-r-2 border-[#D4AF37] rounded-br-lg pointer-events-none z-20" />
-
-                <div className="pt-6" />
-
-                {/* Center Crest & Gold Title */}
-                <div className="relative z-10 px-4 my-auto">
-                  <div className="w-12 h-14 mx-auto mb-3 flex items-center justify-center">
-                    <svg viewBox="0 0 100 120" className="w-full h-full drop-shadow-[0_2px_8px_rgba(212,175,55,0.4)]" fill="none">
-                      <path d="M50 5 L90 25 L90 70 C90 95 50 115 50 115 C50 115 10 95 10 70 L10 25 Z" stroke="#D4AF37" strokeWidth="3" fill="rgba(212,175,55,0.1)"/>
-                      <path d="M50 20 L50 90 M25 55 L75 55" stroke="#D4AF37" strokeWidth="2.5" strokeLinecap="round"/>
-                      <circle cx="50" cy="55" r="4.5" fill="#D4AF37"/>
-                    </svg>
+              {/* Bottom Feature Pill Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 text-left">
+                <div className="bg-stone-950/85 backdrop-blur-md border border-stone-800/80 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl">
+                  <div className="flex items-center gap-2 text-[#D4AF37] font-bold text-xs sm:text-sm mb-0.5">
+                    <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                    <span>Zero App Download</span>
                   </div>
-
-                  <h3 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-[#FFF5C0] via-[#D4AF37] to-[#A07818]">
-                    Your Restaurant
-                  </h3>
-                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#E8C868] mt-2">
-                    KITCHEN & BAR
+                  <p className="text-[10px] sm:text-[11px] text-stone-300 line-clamp-2">
+                    Customers tap table cards or scan QR to immediately open your branded menu.
                   </p>
-                  <div className="flex items-center justify-center gap-2 mt-3 max-w-[140px] mx-auto opacity-75">
-                    <div className="flex-1 h-[1px] bg-gradient-to-r from-transparent to-[#D4AF37]" />
-                    <div className="w-1.5 h-1.5 rotate-45 bg-[#D4AF37]" />
-                    <div className="flex-1 h-[1px] bg-gradient-to-l from-transparent to-[#D4AF37]" />
+                </div>
+
+                <div className="hidden xs:block bg-stone-950/85 backdrop-blur-md border border-stone-800/80 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl">
+                  <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs sm:text-sm mb-0.5">
+                    <ChefHat className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                    <span>Live Kitchen KDS</span>
                   </div>
+                  <p className="text-[10px] sm:text-[11px] text-stone-300 line-clamp-2">
+                    Orders route immediately to line cooks with exact table number and customer notes.
+                  </p>
                 </div>
 
-                {/* Bottom Prompt */}
-                <div className="relative z-10 pb-4">
-                  <span className="text-[10px] font-bold tracking-[0.2em] text-[#D4AF37] uppercase">
-                    TAP OR SWIPE TO OPEN
-                  </span>
+                <div className="hidden xs:block bg-stone-950/85 backdrop-blur-md border border-stone-800/80 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl">
+                  <div className="flex items-center gap-2 text-amber-300 font-bold text-xs sm:text-sm mb-0.5">
+                    <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                    <span>Direct POS & Cash</span>
+                  </div>
+                  <p className="text-[10px] sm:text-[11px] text-stone-300 line-clamp-2">
+                    Zero percentage cuts withheld. Collect 100% of revenue at the table directly.
+                  </p>
                 </div>
-              </div>
-            </div>
-
-            {/* Bottom floating pill preview */}
-            <div className="max-w-sm mx-auto mt-4">
-              <div className="bg-[#121614] rounded-full py-2 px-4 border border-[#D4AF37]/35 flex items-center justify-between text-xs text-stone-300">
-                <span className="font-bold text-amber-200">&lsaquo; Prev</span>
-                <span className="text-amber-200 font-bold">Contents</span>
-                <span className="px-2 py-0.5 rounded-full bg-[#D4AF37] text-stone-950 font-bold text-[11px]">Starters</span>
-                <span className="text-stone-300">Mains</span>
-                <span className="font-bold text-amber-200">Next &rsaquo;</span>
               </div>
             </div>
           </div>
@@ -288,8 +281,8 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
       </section>
 
       {/* 3 Pillars Section */}
-      <section className="max-w-6xl mx-auto px-4 py-16 border-t border-stone-200">
-        <div className="text-center max-w-2xl mx-auto mb-12">
+      <section className="max-w-6xl mx-auto px-4 py-12 sm:py-16 border-t border-stone-200">
+        <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-12">
           <h2 className="font-serif text-2xl sm:text-4xl font-bold text-stone-900">
             Why Top Restaurants Choose DineTap
           </h2>
@@ -298,14 +291,14 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
           <div className="p-6 bg-white rounded-3xl border border-stone-200 shadow-sm">
             <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-800 flex items-center justify-center font-bold mb-4">
               📖
             </div>
             <h3 className="font-serif text-lg font-bold text-stone-900 mb-1">Authentic Menu Book</h3>
             <p className="text-xs text-stone-600 leading-relaxed">
-              Not another boring, clinical PDF or web form. DineTap provides a realistic luxury leather folio with 3D turning pages, debossed foil, and bookmark category tabs.
+              Not another clinical PDF or generic web form. DineTap provides a realistic luxury leather folio with 3D turning pages, debossed foil, and category tabs.
             </p>
           </div>
 
@@ -313,9 +306,9 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
             <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-800 flex items-center justify-center font-bold mb-4">
               📱
             </div>
-            <h3 className="font-serif text-lg font-bold text-stone-900 mb-1">Tap NFC or Scan QR</h3>
+            <h3 className="font-serif text-lg font-bold text-stone-900 mb-1">Tap Digital Card or Scan QR</h3>
             <p className="text-xs text-stone-600 leading-relaxed">
-              Program inexpensive NTAG213 table pucks or print scannable QR stand cards. Orders always carry the specific table number straight to the kitchen.
+              Encode durable digital smart table pucks or print scannable QR stand cards. Orders always carry the specific table number straight to the kitchen.
             </p>
           </div>
 
@@ -332,18 +325,22 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-stone-200 py-12 bg-white text-xs text-stone-500">
+      <footer className="border-t border-stone-200 py-10 sm:py-12 bg-white text-xs text-stone-500">
         <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex flex-col sm:flex-row items-center gap-3">
-            <div className="flex items-center gap-2 font-serif font-bold text-stone-900 text-sm">
-              <span className="w-7 h-7 rounded-lg bg-[#0c2e22] text-[#D4AF37] flex items-center justify-center text-xs shadow-sm">D</span>
+            <button
+              onClick={handleLogoTap}
+              type="button"
+              className="flex items-center gap-2 font-serif font-bold text-stone-900 text-sm focus:outline-none select-none active:scale-95 transition-transform"
+            >
+              <span className="w-7 h-7 rounded-lg bg-[#0c2e22] text-[#D4AF37] flex items-center justify-center text-xs shadow-sm font-serif font-black">D</span>
               <span>DineTap Nigeria</span>
-            </div>
+            </button>
             <span className="hidden sm:inline text-stone-300">|</span>
-            <span className="text-stone-500 text-[11px]">Luxury 3D Digital Menus & NFC Standees</span>
+            <span className="text-stone-500 text-[11px]">Luxury 3D Digital Menus & Smart Tap Standees</span>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-6 text-xs font-semibold text-stone-600">
+          <div className="flex flex-wrap items-center justify-center gap-5 sm:gap-6 text-xs font-semibold text-stone-600">
             <button
               onClick={() => onOpenPricing ? onOpenPricing() : (window.location.search = '?page=pricing')}
               className="hover:text-amber-900 transition-colors"
@@ -356,12 +353,6 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
             >
               Kitchen & Staff Sign In
             </button>
-            <a
-              href="/?admin=true"
-              className="text-stone-400 hover:text-stone-800 transition-colors flex items-center gap-1"
-            >
-              <span>Platform Admin</span>
-            </a>
           </div>
 
           <div className="text-[11px] text-stone-400">

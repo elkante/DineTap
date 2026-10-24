@@ -9,7 +9,7 @@ export function checkWebNfcSupport(): WebNfcSupport {
   if (typeof window !== 'undefined' && 'NDEFReader' in window) {
     return {
       supported: true,
-      message: 'Web NFC is supported on this browser (Chrome on Android). You can write directly to NTAG213 tags!'
+      message: 'Web NFC is supported on this browser (Chrome on Android). You can write directly to digital cards!'
     };
   }
   return {

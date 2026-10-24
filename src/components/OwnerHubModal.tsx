@@ -4,7 +4,6 @@ import {
   Palette, 
   Nfc, 
   ChefHat, 
-  ShieldCheck, 
   X, 
   Building2, 
   Sparkles, 
@@ -125,7 +124,7 @@ export const OwnerHubModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
                 <ChevronRight className="w-4 h-4 text-neutral-400 group-hover:text-neutral-900" />
               </button>
 
-              {/* QR & NTAG213 NFC Manager */}
+              {/* QR & Digital Card Manager */}
               <button
                 onClick={() => handleSelectView('nfc_qr')}
                 className={`p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all group ${
@@ -174,31 +173,6 @@ export const OwnerHubModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
                     </div>
                     <div className="text-[11px] text-neutral-500">
                       Live incoming tickets & waiter buzzer alerts
-                    </div>
-                  </div>
-                </div>
-                <ChevronRight className="w-4 h-4 text-neutral-400 group-hover:text-neutral-900" />
-              </button>
-
-              {/* Platform Super Admin */}
-              <button
-                onClick={() => handleSelectView('super_admin')}
-                className={`p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all group ${
-                  currentView === 'super_admin'
-                    ? 'border-amber-500 bg-amber-50/60'
-                    : 'border-neutral-200 hover:border-neutral-300 bg-white hover:bg-neutral-50'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center font-bold">
-                    <ShieldCheck className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-neutral-900 group-hover:text-purple-800 text-xs">
-                      Platform Super Admin
-                    </div>
-                    <div className="text-[11px] text-neutral-500">
-                      Multi-tenant metrics, plans & hardware logistics
                     </div>
                   </div>
                 </div>

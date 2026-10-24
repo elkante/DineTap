@@ -31,13 +31,13 @@ const MainContent: React.FC = () => {
   const [modalItemQty, setModalItemQty] = useState(1);
   const [modalItemNotes, setModalItemNotes] = useState('');
 
-  // Standalone page routing (?admin=true, ?page=pricing)
+  // Standalone page routing (?page=pricing, secret /sys-hq)
   const [showPricing, setShowPricing] = useState(() => {
     return new URLSearchParams(window.location.search).get('page') === 'pricing';
   });
   const [showAdmin, setShowAdmin] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get('admin') === 'true' || params.get('page') === 'admin';
+    return window.location.pathname === '/sys-hq' || params.get('page') === 'sys-hq';
   });
 
   // Master Super Admin view route

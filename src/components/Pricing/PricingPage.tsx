@@ -238,7 +238,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({
               </div>
               <ul className="text-xs text-stone-600 space-y-1.5 mt-4 pt-4 border-t border-stone-200">
                 <li>✓ 10 Crystal-clear acrylic stands</li>
-                <li>✓ 10 Encoded NTAG chips & QR</li>
+                <li>✓ 10 Encoded Digital Smart Cards & QR</li>
                 <li>✓ Free Lagos dispatch</li>
               </ul>
             </div>

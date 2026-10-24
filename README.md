@@ -1,6 +1,6 @@
 # DineTap SaaS — Interactive Digital Menu & Table Ordering Platform
 
-Multi-tenant restaurant digital menu book and table ordering platform with NTAG213 NFC tag programming, QR table management, Kitchen Display (KDS), and Super Admin management.
+Multi-tenant restaurant digital menu book and table ordering platform with digital smart card programming, QR table management, Kitchen Display (KDS), and administrative controls.
 
 ---
 

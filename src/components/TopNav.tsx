@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   BookOpen, 
@@ -23,14 +23,35 @@ export const TopNav: React.FC<{
 
   const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
+  // Secret 6-tap easter egg for platform super admin (/sys-hq)
+  const [logoTaps, setLogoTaps] = useState(0);
+  const [lastTapTime, setLastTapTime] = useState(0);
+
+  const handleLogoTap = () => {
+    const now = Date.now();
+    if (now - lastTapTime > 3000) {
+      setLogoTaps(1);
+    } else {
+      const next = logoTaps + 1;
+      if (next >= 6) {
+        setLogoTaps(0);
+        window.location.href = '/sys-hq';
+        return;
+      }
+      setLogoTaps(next);
+    }
+    setLastTapTime(now);
+    setCurrentView('flipbook');
+  };
+
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 no-print">
       <div className="max-w-5xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-3">
         {/* Zone 1: Restaurant Identity */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button 
-            onClick={() => setCurrentView('flipbook')}
-            className="flex items-center gap-2 group text-left focus:outline-none min-w-0"
+            onClick={handleLogoTap}
+            className="flex items-center gap-2 group text-left focus:outline-none min-w-0 active:scale-95 transition-transform"
           >
             {activeRestaurant.logo && (activeRestaurant.logo.startsWith('data:') || activeRestaurant.logo.startsWith('http') || activeRestaurant.logo.startsWith('/')) ? (
               <img src={activeRestaurant.logo} alt={activeRestaurant.name} className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl object-cover shrink-0 border border-neutral-200" />

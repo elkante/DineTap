@@ -1,6 +1,6 @@
 {
-  "name": "DineTap SaaS - QR & NTAG213 NFC Restaurant Platform",
-  "description": "Multi-tenant restaurant digital menu and ordering SaaS platform with NTAG213 NFC tag programming, QR table management, Kitchen KDS, and super admin controls.",
+  "name": "DineTap SaaS - Digital Cards & QR Restaurant Platform",
+  "description": "Multi-tenant restaurant digital menu and ordering SaaS platform with digital smart card programming, QR table management, Kitchen KDS, and administrative controls.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

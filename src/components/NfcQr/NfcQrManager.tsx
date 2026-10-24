@@ -107,12 +107,12 @@ export const NfcQrManager: React.FC = () => {
 
   const handleDirectWebNfcWrite = async () => {
     if (!selectedTable) return;
-    setNfcWriteStatus({ loading: true, msg: 'Hold phone against NTAG213 chip...' });
+    setNfcWriteStatus({ loading: true, msg: 'Hold phone against Digital Card chip...' });
 
     const result = await writeNfcUrlPayload(selectedTable.urlPayload);
     if (result.success) {
       setNfcWriteStatus({ loading: false, msg: result.message });
-      showNotification('NTAG213 written successfully!');
+      showNotification('Digital Card written successfully!');
     } else {
       setNfcWriteStatus({ loading: false, msg: result.message, error: true });
     }
@@ -131,7 +131,7 @@ export const NfcQrManager: React.FC = () => {
             <ChevronLeft className="w-4 h-4" />
           </button>
           <div>
-            <h1 className="text-sm font-bold text-neutral-900">QR & NTAG213 Table Tags</h1>
+            <h1 className="text-sm font-bold text-neutral-900">QR & Digital Table Cards</h1>
             <p className="text-[11px] text-neutral-500">{activeRestaurant.name} · {activeRestaurant.tables.length} Tables</p>
           </div>
         </div>
@@ -243,7 +243,7 @@ export const NfcQrManager: React.FC = () => {
                 {isSelected && (
                   <div className="mt-3 pt-3 border-t border-neutral-100 space-y-2.5 text-xs">
                     <div className="flex items-center justify-between text-[11px] text-neutral-500 font-mono bg-neutral-50 p-2 rounded-lg">
-                      <span>NTAG213 UID:</span>
+                      <span>Digital Card UID:</span>
                       <span className="font-bold text-neutral-800">{tbl.ntagSerial}</span>
                     </div>
 
@@ -352,7 +352,7 @@ export const NfcQrManager: React.FC = () => {
           <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-neutral-200">
             <h3 className="text-sm font-bold text-neutral-900 mb-1">Replace Tag for {selectedTable.tableNumber}</h3>
             <p className="text-[11px] text-neutral-500 mb-3">
-              Assign a new NTAG213 UID serial. The table URL remains identical.
+              Assign a new Digital Card UID serial. The table URL remains identical.
             </p>
 
             <form onSubmit={handleConfirmReplacement} className="space-y-3 text-xs">
@@ -419,7 +419,7 @@ export const NfcQrManager: React.FC = () => {
               <div className="font-bold text-neutral-800">Or use free "NFC Tools" app:</div>
               <div>1. Copy the URL payload above.</div>
               <div>2. Open NFC Tools → Write → Add Record → URL.</div>
-              <div>3. Hold phone against NTAG213 tag to write!</div>
+              <div>3. Hold phone against Digital Card to write!</div>
             </div>
 
             <div className="flex justify-end pt-3 border-t border-neutral-100 mt-3">
