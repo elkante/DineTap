@@ -83,7 +83,7 @@ export const CustomerCartDrawer: React.FC<{ isOpen: boolean; onClose: () => void
             </p>
             <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 w-full text-xs text-neutral-600 mb-6 font-mono space-y-1">
               <div>Table: {currentTable || 'Table 01'}</div>
-              <div>Source: {isNfcSource ? 'NTAG213 NFC Tap' : 'QR Scan'}</div>
+              <div>Source: {isNfcSource ? 'Digital Card Tap' : 'QR Scan'}</div>
               <div>
                 Payment:{' '}
                 {paymentChoice === 'pos'

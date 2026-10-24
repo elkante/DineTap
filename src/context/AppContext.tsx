@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { 
   RestaurantTenant, 
   MenuBookDesign, 
@@ -139,10 +139,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [activeRestaurantId, setActiveRestaurantId] = useState<string>(() => {
-    const stored = getStoredRestaurants();
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const slugParam = params.get('r') || params.get('tenant') || params.get('restaurant');
+      if (slugParam) {
+        const stored = getStoredRestaurants();
+        const found = stored.find(r => r.slug.toLowerCase() === slugParam.toLowerCase() || r.id === slugParam);
+        return found ? found.id : '';
+      }
+    }
     const sess = getActiveSession();
     if (sess?.restaurantId) return sess.restaurantId;
-    if (stored.length > 0) return stored[0].id;
     return '';
   });
 
@@ -312,8 +319,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [orders]);
 
-  // Active restaurant reference
-  const activeRestaurant = restaurants.find(r => r.id === activeRestaurantId) || restaurants[0] || EMPTY_RESTAURANT;
+  // Active restaurant reference: strictly match customer requested slug or owner session, NEVER leak stale cached restaurants
+  const activeRestaurant = useMemo(() => {
+    if (isCustomerRoute && requestedSlug) {
+      const match = restaurants.find(r => 
+        r.slug.toLowerCase() === requestedSlug.toLowerCase() || 
+        r.id === requestedSlug
+      );
+      return match || EMPTY_RESTAURANT;
+    }
+    if (ownerSession?.restaurantId || ownerSession?.restaurantSlug) {
+      const owned = restaurants.find(r => 
+        (ownerSession.restaurantId && r.id === ownerSession.restaurantId) ||
+        (ownerSession.restaurantSlug && r.slug.toLowerCase() === ownerSession.restaurantSlug.toLowerCase())
+      );
+      if (owned) return owned;
+    }
+    if (activeRestaurantId) {
+      const found = restaurants.find(r => r.id === activeRestaurantId);
+      if (found) return found;
+    }
+    return restaurants[0] || EMPTY_RESTAURANT;
+  }, [restaurants, activeRestaurantId, isCustomerRoute, requestedSlug, ownerSession]);
 
   const showNotification = (msg: string) => {
     setNotificationMsg(msg);

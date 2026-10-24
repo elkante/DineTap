@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { setActiveSession, fileToDataUrl, saveDishToSupabase } from '../../utils/supabase';
+import { setActiveSession, fileToDataUrl, saveDishToSupabase, deleteDishFromSupabase } from '../../utils/supabase';
 import { generateQrDataUrl } from '../../utils/nfc';
 import { 
   ChefHat, 
@@ -22,6 +22,7 @@ import {
   Building2,
   PhoneCall,
   Upload,
+  Pencil,
   Image as ImageIcon
 } from 'lucide-react';
 import { FoodItem } from '../../types';
@@ -50,12 +51,14 @@ export const RestaurantDashboard: React.FC = () => {
 
   // Menu item modal
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
+  const [editingDish, setEditingDish] = useState<(FoodItem & { pageId: string; pageTitle?: string }) | null>(null);
   const [newItemName, setNewItemName] = useState('');
   const [newItemPrice, setNewItemPrice] = useState(3000);
   const [newItemDesc, setNewItemDesc] = useState('');
   const [newItemBadge, setNewItemBadge] = useState<FoodItem['badge']>('');
   const [newItemPrepTime, setNewItemPrepTime] = useState('15 min');
   const [newItemImage, setNewItemImage] = useState<string>('');
+  const [newItemCategory, setNewItemCategory] = useState<string>('');
 
   // Add Table state
   const [newTableNumber, setNewTableNumber] = useState('');
@@ -125,13 +128,34 @@ export const RestaurantDashboard: React.FC = () => {
     }
   };
 
-  const handleCreateDish = (e: React.FormEvent) => {
+  const handleOpenAddDish = () => {
+    setEditingDish(null);
+    setNewItemName('');
+    setNewItemPrice(3000);
+    setNewItemDesc('');
+    setNewItemBadge('');
+    setNewItemPrepTime('15 min');
+    setNewItemImage('');
+    const firstContentPage = activeRestaurant.pages.find(p => p.layout !== 'cover');
+    setNewItemCategory(firstContentPage?.title || 'Specialities');
+    setIsAddItemOpen(true);
+  };
+
+  const handleOpenEditDish = (dish: FoodItem & { pageId: string; pageTitle?: string }) => {
+    setEditingDish(dish);
+    setNewItemName(dish.name);
+    setNewItemPrice(dish.price);
+    setNewItemDesc(dish.description || '');
+    setNewItemBadge(dish.badge || '');
+    setNewItemPrepTime(dish.prepTime || '15 min');
+    setNewItemImage(dish.imageUrl || '');
+    setNewItemCategory(dish.pageTitle || 'Specialities');
+    setIsAddItemOpen(true);
+  };
+
+  const handleSaveDish = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItemName.trim()) return;
-
-    // Add to first content page (page 2)
-    const targetPage = activeRestaurant.pages.find(p => p.layout !== 'cover') || activeRestaurant.pages[0];
-    if (!targetPage) return;
 
     const dishPayload = {
       name: newItemName.trim(),
@@ -142,17 +166,41 @@ export const RestaurantDashboard: React.FC = () => {
       imageUrl: newItemImage || undefined,
     };
 
-    addFoodItem(targetPage.id, dishPayload);
-    saveDishToSupabase(activeRestaurant.id, {
-      id: `it-${Date.now()}`,
-      ...dishPayload,
-    }, targetPage.title);
+    if (editingDish) {
+      // Update existing dish
+      updateFoodItem(editingDish.pageId, editingDish.id, dishPayload);
+      saveDishToSupabase(activeRestaurant.id, {
+        id: editingDish.id,
+        isSoldOut: editingDish.isSoldOut,
+        allergens: editingDish.allergens,
+        ...dishPayload,
+      }, newItemCategory || editingDish.pageTitle || 'Specialities');
+      showNotification(`Updated "${dishPayload.name}"!`);
+    } else {
+      // Add new dish
+      let targetPage = activeRestaurant.pages.find(p => p.layout !== 'cover' && p.title.toLowerCase() === newItemCategory.toLowerCase());
+      if (!targetPage) {
+        targetPage = activeRestaurant.pages.find(p => p.layout !== 'cover') || activeRestaurant.pages[0];
+      }
+      if (!targetPage) return;
 
-    showNotification(`Added "${dishPayload.name}" to menu!`);
-    setNewItemName('');
-    setNewItemDesc('');
-    setNewItemImage('');
+      const newDishId = `it-${Date.now()}`;
+      addFoodItem(targetPage.id, dishPayload);
+      saveDishToSupabase(activeRestaurant.id, {
+        id: newDishId,
+        ...dishPayload,
+      }, targetPage.title);
+      showNotification(`Added "${dishPayload.name}" to menu!`);
+    }
+
     setIsAddItemOpen(false);
+    setEditingDish(null);
+  };
+
+  const handleDeleteDish = (pageId: string, dishId: string) => {
+    deleteFoodItem(pageId, dishId);
+    deleteDishFromSupabase(dishId);
+    showNotification('Dish removed from menu');
   };
 
   const handleAddTable = (e: React.FormEvent) => {
@@ -193,20 +241,20 @@ export const RestaurantDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <a
               href={customerMenuUrl}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-xl text-xs font-semibold transition-colors"
+              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-xl text-xs font-semibold transition-colors"
             >
-              <span>View Customer Menu</span>
+              <span className="hidden xs:inline">View Menu</span>
               <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
             </a>
 
             <button
               onClick={handleLogout}
-              className="p-2 text-neutral-400 hover:text-red-400 hover:bg-neutral-800 rounded-xl transition-colors"
+              className="p-1.5 sm:p-2 text-neutral-400 hover:text-red-400 hover:bg-neutral-800 rounded-xl transition-colors"
               title="Log Out"
             >
               <LogOut className="w-4 h-4" />
@@ -215,10 +263,10 @@ export const RestaurantDashboard: React.FC = () => {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="max-w-6xl mx-auto px-4 flex items-center gap-2 overflow-x-auto text-xs pb-2 border-t border-neutral-800/60 pt-2">
+        <div className="max-w-6xl mx-auto px-2 sm:px-4 flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar whitespace-nowrap text-xs pb-2 border-t border-neutral-800/60 pt-2">
           <button
             onClick={() => setActiveTab('kds')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-bold transition-all ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded-xl font-bold shrink-0 transition-all ${
               activeTab === 'kds'
                 ? 'bg-amber-500 text-neutral-950 shadow'
                 : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
@@ -237,7 +285,7 @@ export const RestaurantDashboard: React.FC = () => {
 
           <button
             onClick={() => setActiveTab('menu')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-bold transition-all ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded-xl font-bold shrink-0 transition-all ${
               activeTab === 'menu'
                 ? 'bg-amber-500 text-neutral-950 shadow'
                 : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
@@ -249,7 +297,7 @@ export const RestaurantDashboard: React.FC = () => {
 
           <button
             onClick={() => setActiveTab('tables')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-bold transition-all ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded-xl font-bold shrink-0 transition-all ${
               activeTab === 'tables'
                 ? 'bg-amber-500 text-neutral-950 shadow'
                 : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
@@ -261,7 +309,7 @@ export const RestaurantDashboard: React.FC = () => {
 
           <button
             onClick={() => setActiveTab('settings')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-bold transition-all ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded-xl font-bold shrink-0 transition-all ${
               activeTab === 'settings'
                 ? 'bg-amber-500 text-neutral-950 shadow'
                 : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
@@ -479,7 +527,7 @@ export const RestaurantDashboard: React.FC = () => {
               </div>
 
               <button
-                onClick={() => setIsAddItemOpen(true)}
+                onClick={handleOpenAddDish}
                 className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
               >
                 <Plus className="w-4 h-4 text-amber-400" />
@@ -487,65 +535,105 @@ export const RestaurantDashboard: React.FC = () => {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {allDishes.map(dish => (
-                <div
-                  key={dish.id}
-                  className={`bg-white rounded-2xl border p-4 shadow-xs flex items-center justify-between gap-3 ${
-                    dish.isSoldOut ? 'opacity-65 border-red-200 bg-red-50/20' : 'border-neutral-200'
-                  }`}
+            {allDishes.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-neutral-200 p-8 text-center">
+                <Utensils className="w-8 h-8 text-neutral-300 mx-auto mb-2" />
+                <h3 className="font-bold text-neutral-900 text-sm mb-1">No dishes added yet</h3>
+                <p className="text-xs text-neutral-500 mb-4">Add your signature dishes with photos and prices to build your digital menu book.</p>
+                <button
+                  onClick={handleOpenAddDish}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-900 text-white text-xs font-bold rounded-xl"
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-bold text-neutral-900 text-sm truncate">{dish.name}</h3>
-                      {dish.isSoldOut ? (
-                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-red-100 text-red-600 uppercase">
-                          Sold Out
-                        </span>
-                      ) : dish.badge ? (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-amber-50 text-amber-800">
-                          {dish.badge}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <p className="text-xs text-neutral-500 line-clamp-1 mb-1.5">{dish.description}</p>
-
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className="font-mono font-bold text-neutral-900">
-                        {design.currencySymbol}{dish.price.toLocaleString()}
-                      </span>
-                      {dish.prepTime && (
-                        <span className="text-[11px] text-neutral-400 flex items-center gap-0.5">
-                          <Clock className="w-3 h-3" /> {dish.prepTime}
-                        </span>
+                  <Plus className="w-4 h-4 text-amber-400" />
+                  <span>Add First Dish</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {allDishes.map(dish => (
+                  <div
+                    key={dish.id}
+                    className={`bg-white rounded-2xl border p-3 sm:p-4 shadow-xs flex items-center justify-between gap-3 ${
+                      dish.isSoldOut ? 'opacity-65 border-red-200 bg-red-50/20' : 'border-neutral-200'
+                    }`}
+                  >
+                    {/* Dish Thumbnail */}
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-neutral-100 border border-neutral-200 overflow-hidden shrink-0 flex items-center justify-center relative shadow-xs">
+                      {dish.imageUrl ? (
+                        <img src={dish.imageUrl} alt={dish.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <Utensils className="w-5 h-5 text-neutral-300" />
+                      )}
+                      {dish.isSoldOut && (
+                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                          <span className="text-[8px] font-bold text-white bg-red-600 px-1 py-0.5 rounded">SOLD</span>
+                        </div>
                       )}
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      onClick={() => toggleSoldOut(dish.pageId, dish.id)}
-                      className={`text-[11px] px-2.5 py-1.5 rounded-lg font-bold transition-colors ${
-                        dish.isSoldOut
-                          ? 'bg-amber-100 text-amber-900 hover:bg-amber-200'
-                          : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
-                      }`}
-                    >
-                      {dish.isSoldOut ? 'Restock' : 'Sold Out'}
-                    </button>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <h3 className="font-bold text-neutral-900 text-sm truncate">{dish.name}</h3>
+                        {dish.isSoldOut ? (
+                          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-red-100 text-red-600 uppercase shrink-0">
+                            Sold Out
+                          </span>
+                        ) : dish.badge ? (
+                          <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 shrink-0">
+                            {dish.badge}
+                          </span>
+                        ) : null}
+                      </div>
 
-                    <button
-                      onClick={() => deleteFoodItem(dish.pageId, dish.id)}
-                      className="p-1.5 text-neutral-400 hover:text-red-500 rounded-lg transition-colors"
-                      title="Delete dish"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                      <p className="text-xs text-neutral-500 line-clamp-1 mb-1.5">{dish.description || 'No description'}</p>
+
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="font-mono font-bold text-neutral-900">
+                          {design.currencySymbol}{dish.price.toLocaleString()}
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 bg-neutral-100 text-neutral-600 rounded-md font-medium">
+                          {dish.pageTitle}
+                        </span>
+                        {dish.prepTime && (
+                          <span className="text-[11px] text-neutral-400 flex items-center gap-0.5">
+                            <Clock className="w-3 h-3" /> {dish.prepTime}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleOpenEditDish(dish)}
+                        className="p-1.5 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"
+                        title="Edit dish & photo"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        onClick={() => toggleSoldOut(dish.pageId, dish.id)}
+                        className={`text-[11px] px-2 py-1.5 rounded-lg font-bold transition-colors ${
+                          dish.isSoldOut
+                            ? 'bg-amber-100 text-amber-900 hover:bg-amber-200'
+                            : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                        }`}
+                      >
+                        {dish.isSoldOut ? 'Restock' : 'Sold Out'}
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteDish(dish.pageId, dish.id)}
+                        className="p-1.5 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete dish"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -563,16 +651,8 @@ export const RestaurantDashboard: React.FC = () => {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => window.print()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-neutral-200 text-neutral-800 rounded-xl text-xs font-bold hover:bg-neutral-50 shadow-xs"
-                >
-                  <Printer className="w-3.5 h-3.5 text-neutral-600" />
-                  <span>Print Stand Cards</span>
-                </button>
-              </div>
             </div>
+
 
             {/* Bulk Generate Panel */}
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -800,14 +880,58 @@ export const RestaurantDashboard: React.FC = () => {
         )}
       </main>
 
-      {/* Modal: Add New Food Item */}
+      {/* Modal: Add or Edit Food Item */}
       {isAddItemOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-neutral-200 text-xs">
-            <h3 className="text-sm font-bold text-neutral-900 mb-1">Add Dish to Menu</h3>
-            <p className="text-[11px] text-neutral-500 mb-3">Item will be live on your table QR menus immediately.</p>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl max-w-sm sm:max-w-md w-full p-4 sm:p-5 shadow-2xl border border-neutral-200 text-xs max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-sm sm:text-base font-bold text-neutral-900">
+                {editingDish ? 'Edit Menu Dish & Photo' : 'Add Dish to Menu'}
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => { setIsAddItemOpen(false); setEditingDish(null); }}
+                className="text-neutral-400 hover:text-neutral-700 p-1"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-[11px] text-neutral-500 mb-3">
+              Changes sync live to all diner mobile flipbooks immediately.
+            </p>
 
-            <form onSubmit={handleCreateDish} className="space-y-3">
+            <form onSubmit={handleSaveDish} className="space-y-3">
+              {/* Dish Photo Uploader */}
+              <div>
+                <label className="block font-bold text-neutral-700 mb-1">Dish Photo</label>
+                {newItemImage ? (
+                  <div className="relative w-full h-32 sm:h-36 rounded-xl overflow-hidden border border-neutral-200 mb-1.5 shadow-xs">
+                    <img src={newItemImage} alt="Preview" className="w-full h-full object-cover" />
+                    <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                      <label className="p-1.5 bg-neutral-900/80 hover:bg-neutral-900 text-white rounded-lg shadow-sm cursor-pointer transition-colors" title="Change photo">
+                        <Upload className="w-3.5 h-3.5" />
+                        <input type="file" accept="image/*" onChange={handleDishImageUpload} className="hidden" />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setNewItemImage('')}
+                        className="p-1.5 bg-red-600/90 hover:bg-red-600 text-white rounded-lg shadow-sm transition-colors"
+                        title="Remove image"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center gap-1.5 p-4 border-2 border-dashed border-neutral-200 hover:border-amber-500 rounded-xl cursor-pointer bg-neutral-50 transition-colors">
+                    <Upload className="w-5 h-5 text-neutral-400" />
+                    <span className="text-xs font-bold text-neutral-700">Attach Dish Photo</span>
+                    <span className="text-[10px] text-neutral-400">Click to upload from camera roll or files</span>
+                    <input type="file" accept="image/*" onChange={handleDishImageUpload} className="hidden" />
+                  </label>
+                )}
+              </div>
+
               <div>
                 <label className="block font-bold text-neutral-700 mb-1">Dish Name *</label>
                 <input
@@ -815,43 +939,33 @@ export const RestaurantDashboard: React.FC = () => {
                   required
                   value={newItemName}
                   onChange={(e) => setNewItemName(e.target.value)}
-                  placeholder="e.g. Charcoal Suya Platter"
-                  className="w-full px-3 py-2 border border-neutral-200 rounded-xl focus:outline-none focus:border-neutral-900"
+                  placeholder="e.g. Charcoal Suya Platter, Jollof Rice Special"
+                  className="w-full px-3 py-2 border border-neutral-200 rounded-xl focus:outline-none focus:border-neutral-900 text-xs"
                 />
               </div>
 
+              {/* Category Selector */}
               <div>
-                <label className="block font-bold text-neutral-700 mb-1">Dish Photo</label>
-                {newItemImage ? (
-                  <div className="relative w-full h-28 rounded-xl overflow-hidden border border-neutral-200 mb-2">
-                    <img src={newItemImage} alt="Preview" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setNewItemImage('')}
-                      className="absolute top-2 right-2 p-1.5 bg-neutral-900/80 hover:bg-neutral-900 text-white rounded-lg shadow-sm"
-                      title="Remove image"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-neutral-200 hover:border-amber-500 rounded-xl cursor-pointer bg-neutral-50 transition-colors">
-                    <Upload className="w-4 h-4 text-neutral-500" />
-                    <span className="text-xs font-semibold text-neutral-700">Attach Photo from Device</span>
-                    <input type="file" accept="image/*" onChange={handleDishImageUpload} className="hidden" />
-                  </label>
-                )}
-              </div>
-
-              <div>
-                <label className="block font-bold text-neutral-700 mb-1">Description</label>
-                <textarea
-                  rows={2}
-                  value={newItemDesc}
-                  onChange={(e) => setNewItemDesc(e.target.value)}
-                  placeholder="Ingredients and culinary notes..."
-                  className="w-full px-3 py-2 border border-neutral-200 rounded-xl focus:outline-none focus:border-neutral-900"
+                <label className="block font-bold text-neutral-700 mb-1">Menu Section / Category *</label>
+                <input
+                  type="text"
+                  required
+                  value={newItemCategory}
+                  onChange={(e) => setNewItemCategory(e.target.value)}
+                  placeholder="e.g. Mains, Starters, Drinks, Grill, Desserts"
+                  className="w-full px-3 py-2 border border-neutral-200 rounded-xl focus:outline-none focus:border-neutral-900 text-xs"
+                  list="category-suggestions"
                 />
+                <datalist id="category-suggestions">
+                  {activeRestaurant.pages
+                    .filter(p => p.layout !== 'cover')
+                    .map(p => (
+                      <option key={p.id} value={p.title} />
+                    ))}
+                </datalist>
+                <div className="text-[10px] text-neutral-400 mt-0.5">
+                  Dishes are grouped into book pages by category.
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
@@ -865,39 +979,61 @@ export const RestaurantDashboard: React.FC = () => {
                     min={0}
                     value={newItemPrice}
                     onChange={(e) => setNewItemPrice(Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-neutral-200 rounded-xl font-mono focus:outline-none focus:border-neutral-900"
+                    className="w-full px-3 py-2 border border-neutral-200 rounded-xl font-mono focus:outline-none focus:border-neutral-900 text-xs"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-neutral-700 mb-1">Badge</label>
-                  <select
-                    value={newItemBadge || ''}
-                    onChange={(e) => setNewItemBadge(e.target.value as FoodItem['badge'])}
-                    className="w-full px-3 py-2 border border-neutral-200 rounded-xl focus:outline-none focus:border-neutral-900"
-                  >
-                    <option value="">None</option>
-                    <option value="Chef Special">Chef Special</option>
-                    <option value="Bestseller">Bestseller</option>
-                    <option value="Spicy">Spicy</option>
-                    <option value="Popular">Popular</option>
-                  </select>
+                  <label className="block font-bold text-neutral-700 mb-1">Prep Time</label>
+                  <input
+                    type="text"
+                    value={newItemPrepTime}
+                    onChange={(e) => setNewItemPrepTime(e.target.value)}
+                    placeholder="15 min"
+                    className="w-full px-3 py-2 border border-neutral-200 rounded-xl focus:outline-none focus:border-neutral-900 text-xs"
+                  />
                 </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-neutral-700 mb-1">Special Badge</label>
+                <select
+                  value={newItemBadge || ''}
+                  onChange={(e) => setNewItemBadge(e.target.value as FoodItem['badge'])}
+                  className="w-full px-3 py-2 border border-neutral-200 rounded-xl focus:outline-none focus:border-neutral-900 text-xs"
+                >
+                  <option value="">None</option>
+                  <option value="Chef Special">👨‍🍳 Chef Special</option>
+                  <option value="Bestseller">🔥 Bestseller</option>
+                  <option value="Spicy">🌶️ Spicy</option>
+                  <option value="Popular">⭐ Popular</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-neutral-700 mb-1">Description</label>
+                <textarea
+                  rows={2}
+                  value={newItemDesc}
+                  onChange={(e) => setNewItemDesc(e.target.value)}
+                  placeholder="Ingredients, seasonings, and dietary notes..."
+                  className="w-full px-3 py-2 border border-neutral-200 rounded-xl focus:outline-none focus:border-neutral-900 text-xs"
+                />
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-100">
                 <button
                   type="button"
-                  onClick={() => setIsAddItemOpen(false)}
-                  className="px-3 py-1.5 text-neutral-600 rounded-lg"
+                  onClick={() => { setIsAddItemOpen(false); setEditingDish(null); }}
+                  className="px-3 py-1.5 text-neutral-600 rounded-lg hover:bg-neutral-100 text-xs"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-neutral-900 text-white font-bold rounded-xl shadow-xs"
+                  className="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-xl shadow-xs text-xs transition-colors"
                 >
-                  Save Dish
+                  {editingDish ? 'Update Dish' : 'Save Dish'}
                 </button>
               </div>
             </form>

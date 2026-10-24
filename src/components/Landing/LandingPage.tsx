@@ -196,30 +196,15 @@ export const LandingPage: React.FC = () => {
         {/* ========================================================================= */}
         <div className="mt-16 max-w-4xl mx-auto">
           <div className="bg-stone-100/70 border border-stone-200/90 rounded-3xl p-6 sm:p-10 shadow-xl relative overflow-hidden">
-            {/* Color Switcher Bar */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 pb-4 border-b border-stone-200">
-              <div className="text-left">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800 block">Live Menu Book Customizer</span>
-                <span className="text-sm font-bold text-stone-800">Choose your restaurant's signature cover leather:</span>
+            {/* Header info */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 mb-6 pb-4 border-b border-stone-200">
+              <div className="text-center sm:text-left">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800 block">Realistic 3D Flipbook Experience</span>
+                <span className="text-sm font-bold text-stone-800">What diners see on their phones when scanning table cards:</span>
               </div>
-
-              {/* Color Swatches */}
-              <div className="flex items-center gap-2">
-                {COLOR_PRESETS.map(preset => (
-                  <button
-                    key={preset.hex}
-                    onClick={() => setPreviewColor(preset.hex)}
-                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full transition-all border-2 flex items-center justify-center ${
-                      previewColor === preset.hex ? 'scale-110 shadow-md ring-2 ring-amber-400' : 'opacity-80 hover:opacity-100'
-                    }`}
-                    style={{ backgroundColor: preset.hex, borderColor: preset.border }}
-                    title={preset.name}
-                  >
-                    {previewColor === preset.hex && (
-                      <span className="w-2 h-2 rounded-full bg-[#D4AF37]" />
-                    )}
-                  </button>
-                ))}
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#0c2e22]/10 border border-[#D4AF37]/40 text-[#0c2e22] rounded-full text-xs font-bold">
+                <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
+                <span>Custom Leather & Colors in Dashboard</span>
               </div>
             </div>
 
@@ -404,32 +389,6 @@ export const LandingPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Signature Book Color Picker (As requested by user!) */}
-              <div>
-                <label className="block font-bold text-stone-700 mb-1">Signature Menu Book Color</label>
-                <div className="flex items-center gap-2 p-2 bg-stone-50 border border-stone-200 rounded-xl">
-                  {COLOR_PRESETS.map(preset => (
-                    <button
-                      type="button"
-                      key={preset.hex}
-                      onClick={() => setChosenColor(preset.hex)}
-                      className={`w-7 h-7 rounded-full border-2 transition-all ${
-                        chosenColor === preset.hex ? 'scale-110 ring-2 ring-amber-400 shadow-md' : 'opacity-80'
-                      }`}
-                      style={{ backgroundColor: preset.hex, borderColor: preset.border }}
-                      title={preset.name}
-                    />
-                  ))}
-                  <div className="h-5 w-[1px] bg-stone-300 mx-1" />
-                  <input
-                    type="color"
-                    value={chosenColor}
-                    onChange={(e) => setChosenColor(e.target.value)}
-                    className="w-7 h-7 rounded-lg cursor-pointer bg-transparent border-0"
-                    title="Pick custom hex color"
-                  />
-                </div>
-              </div>
 
               <div className="grid grid-cols-2 gap-2.5">
                 <div>

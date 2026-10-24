@@ -40,7 +40,7 @@ export async function writeNfcUrlPayload(url: string): Promise<{ success: boolea
 
     return {
       success: true,
-      message: 'Successfully programmed NTAG213 tag with menu URL!'
+      message: 'Successfully programmed digital card with menu URL!'
     };
   } catch (error: unknown) {
     const err = error as Error;

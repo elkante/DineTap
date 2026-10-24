@@ -306,9 +306,9 @@ export async function registerRestaurant(data: {
     cover_color: coverColor,
   }, []);
 
-  // Save to local cache
+  // Save to local cache (new restaurant first)
   const stored = getStoredRestaurants().filter(r => r.slug !== cleanSlug);
-  saveStoredRestaurants([...stored, newRestaurant]);
+  saveStoredRestaurants([newRestaurant, ...stored]);
 
   // Set session
   const session: OwnerSession = {

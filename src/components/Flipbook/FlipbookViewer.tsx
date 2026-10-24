@@ -165,14 +165,6 @@ export const FlipbookViewer: React.FC = () => {
           >
             {isAudioEnabled ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4 text-neutral-600" />}
           </button>
-
-          {/* Quick List Switcher */}
-          <button
-            onClick={() => setCurrentView('quick_menu')}
-            className="text-[11px] font-semibold text-neutral-300 hover:text-amber-300 px-2 py-0.5 rounded-md hover:bg-white/5 transition-colors"
-          >
-            Quick List &rarr;
-          </button>
         </div>
       </div>
 
@@ -197,10 +189,10 @@ export const FlipbookViewer: React.FC = () => {
         {/* ========================================================================= */}
         {/* PHYSICAL LEATHER-BOUND RESTAURANT MENU BOOK */}
         {/* ========================================================================= */}
-        <div className="relative">
+        <div className="relative w-[calc(100vw-1.25rem)] max-w-sm xs:max-w-md sm:max-w-lg mx-auto">
           {/* Outer Leather Folio Casing with Stacked Paper Edge Depth */}
           <div 
-            className="relative p-2 sm:p-3 rounded-[24px] sm:rounded-[32px] transition-transform duration-300"
+            className="relative w-full p-2 sm:p-3 rounded-[22px] sm:rounded-[32px] transition-transform duration-300"
             style={{
               backgroundColor: coverThemeColor,
               backgroundImage: 'radial-gradient(circle at 50% 40%, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.5) 100%)',
@@ -210,21 +202,21 @@ export const FlipbookViewer: React.FC = () => {
           >
             {/* Book Spine on the Left */}
             <div 
-              className="absolute top-3 bottom-3 left-2 sm:left-3 w-5 z-30 pointer-events-none rounded-l-md"
+              className="absolute top-3 bottom-3 left-2 sm:left-3 w-4 sm:w-5 z-30 pointer-events-none rounded-l-md"
               style={{
                 background: 'linear-gradient(to right, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 60%, transparent 100%)'
               }}
             />
 
             {/* Brass Corner Braces in 4 corners */}
-            <div className="absolute top-2.5 left-2.5 w-6 h-6 border-t-2 border-l-2 border-[#D4AF37] rounded-tl-lg pointer-events-none z-30" />
-            <div className="absolute top-2.5 right-2.5 w-6 h-6 border-t-2 border-r-2 border-[#D4AF37] rounded-tr-lg pointer-events-none z-30" />
-            <div className="absolute bottom-2.5 left-2.5 w-6 h-6 border-b-2 border-l-2 border-[#D4AF37] rounded-bl-lg pointer-events-none z-30" />
-            <div className="absolute bottom-2.5 right-2.5 w-6 h-6 border-b-2 border-r-2 border-[#D4AF37] rounded-br-lg pointer-events-none z-30" />
+            <div className="absolute top-2.5 left-2.5 w-5 h-5 sm:w-6 sm:h-6 border-t-2 border-l-2 border-[#D4AF37] rounded-tl-lg pointer-events-none z-30" />
+            <div className="absolute top-2.5 right-2.5 w-5 h-5 sm:w-6 sm:h-6 border-t-2 border-r-2 border-[#D4AF37] rounded-tr-lg pointer-events-none z-30" />
+            <div className="absolute bottom-2.5 left-2.5 w-5 h-5 sm:w-6 sm:h-6 border-b-2 border-l-2 border-[#D4AF37] rounded-bl-lg pointer-events-none z-30" />
+            <div className="absolute bottom-2.5 right-2.5 w-5 h-5 sm:w-6 sm:h-6 border-b-2 border-r-2 border-[#D4AF37] rounded-br-lg pointer-events-none z-30" />
 
             {/* Layered Paper Stack Edge (Bottom & Right) to give true 3D book thickness */}
             <div 
-              className="w-full max-w-sm xs:max-w-md sm:max-w-lg h-[520px] xs:h-[570px] sm:h-[620px] relative rounded-2xl overflow-hidden bg-[#FAF7F2]"
+              className="w-full h-[490px] xs:h-[550px] sm:h-[620px] relative rounded-2xl overflow-hidden bg-[#FAF7F2]"
               style={{
                 boxShadow: '2px 2px 0 #ede8db, 4px 4px 0 #e0d9c8, 6px 6px 0 #d5ccb8, 12px 14px 28px rgba(0,0,0,0.55)',
                 perspective: '1600px',
@@ -325,13 +317,13 @@ export const FlipbookViewer: React.FC = () => {
       {/* ========================================================================= */}
       {/* FLOATING PILL NAVIGATION BAR (Exact replica of The Corner Table reference!) */}
       {/* ========================================================================= */}
-      <div className="max-w-xl mx-auto w-full pt-2 pb-1">
-        <div className="bg-[#121614]/95 backdrop-blur-md rounded-full py-2 px-3 sm:px-4 border border-[#D4AF37]/35 flex items-center justify-between gap-1 sm:gap-2 shadow-2xl text-xs overflow-x-auto">
+      <div className="max-w-xl mx-auto w-full px-2 pt-2 pb-1">
+        <div className="bg-[#121614]/95 backdrop-blur-md rounded-full py-1.5 px-2.5 sm:px-4 border border-[#D4AF37]/40 flex items-center justify-between gap-1 shadow-2xl text-xs">
           {/* < Prev */}
           <button
             onClick={goToPrevPage}
             disabled={currentPageIndex === 0}
-            className="flex items-center gap-1 font-bold text-neutral-300 hover:text-[#D4AF37] disabled:opacity-30 transition-colors whitespace-nowrap px-1.5 py-1"
+            className="flex items-center gap-0.5 font-bold text-neutral-300 hover:text-[#D4AF37] disabled:opacity-30 transition-colors whitespace-nowrap px-2 py-1 text-xs shrink-0"
           >
             <span>&lsaquo; Prev</span>
           </button>
@@ -339,34 +331,37 @@ export const FlipbookViewer: React.FC = () => {
           {/* Contents Index Modal Trigger */}
           <button
             onClick={() => setContentsOpen(true)}
-            className="font-bold text-amber-200 hover:text-white transition-colors whitespace-nowrap px-2 py-1"
+            className="font-bold text-amber-200 hover:text-white transition-colors whitespace-nowrap px-2 py-1 text-xs flex items-center gap-1 shrink-0"
           >
-            Contents
+            <BookMarked className="w-3.5 h-3.5 text-[#D4AF37]" />
+            <span>Contents</span>
           </button>
 
-          {/* Category Pills (Breakfast, Drinks, Dessert, etc.) */}
-          {categoryPages.slice(0, 4).map(cat => {
-            const isActive = currentPageIndex === cat.pageIndex;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => jumpToPage(cat.pageIndex)}
-                className={`font-semibold whitespace-nowrap px-2 py-1 rounded-full transition-all text-[11px] sm:text-xs ${
-                  isActive
-                    ? 'bg-[#D4AF37] text-neutral-950 font-bold shadow-md'
-                    : 'text-neutral-300 hover:text-white'
-                }`}
-              >
-                {cat.title}
-              </button>
-            );
-          })}
+          {/* Horizontally scrollable Category Pills */}
+          <div className="flex-1 flex items-center gap-1 overflow-x-auto no-scrollbar scroll-smooth px-1">
+            {categoryPages.map(cat => {
+              const isActive = currentPageIndex === cat.pageIndex;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => jumpToPage(cat.pageIndex)}
+                  className={`font-semibold whitespace-nowrap px-2.5 py-1 rounded-full transition-all text-[11px] sm:text-xs shrink-0 ${
+                    isActive
+                      ? 'bg-[#D4AF37] text-neutral-950 font-bold shadow-md'
+                      : 'text-neutral-300 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  {cat.title}
+                </button>
+              );
+            })}
+          </div>
 
           {/* Next > */}
           <button
             onClick={goToNextPage}
             disabled={currentPageIndex >= pages.length - 1}
-            className="flex items-center gap-1 font-bold text-neutral-300 hover:text-[#D4AF37] disabled:opacity-30 transition-colors whitespace-nowrap px-1.5 py-1"
+            className="flex items-center gap-0.5 font-bold text-neutral-300 hover:text-[#D4AF37] disabled:opacity-30 transition-colors whitespace-nowrap px-2 py-1 text-xs shrink-0"
           >
             <span>Next &rsaquo;</span>
           </button>
@@ -415,15 +410,9 @@ export const FlipbookViewer: React.FC = () => {
             </div>
 
             <div className="mt-3 pt-3 border-t border-neutral-800 flex items-center justify-between text-xs">
-              <button
-                onClick={() => {
-                  setContentsOpen(false);
-                  setCurrentView('quick_menu');
-                }}
-                className="text-[#D4AF37] hover:underline text-[11px] font-bold"
-              >
-                Switch to Quick List &rarr;
-              </button>
+              <span className="text-[11px] text-amber-200/70">
+                Tap any section to jump directly to it
+              </span>
               <button
                 onClick={() => setContentsOpen(false)}
                 className="text-neutral-400 hover:text-white text-[11px]"

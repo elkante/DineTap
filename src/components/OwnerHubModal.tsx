@@ -140,10 +140,10 @@ export const OwnerHubModal: React.FC<{ isOpen: boolean; onClose: () => void }> =
                   </div>
                   <div>
                     <div className="font-bold text-neutral-900 group-hover:text-blue-800 text-xs">
-                      QR & NTAG213 NFC Tags
+                      QR Codes & Digital Cards
                     </div>
                     <div className="text-[11px] text-neutral-500">
-                      Write tags, print tent cards & manage tables
+                      Program digital cards, print tent cards & manage tables
                     </div>
                   </div>
                 </div>

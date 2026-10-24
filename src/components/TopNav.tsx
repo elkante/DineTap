@@ -58,35 +58,8 @@ export const TopNav: React.FC<{
           )}
         </div>
 
-        {/* Zone 2: View Switcher (Flipbook vs List) & Actions */}
-        <div className="flex items-center gap-2 shrink-0">
-          {/* View Mode Toggle Pill (Flipbook / List) */}
-          <div className="flex items-center p-0.5 bg-neutral-100 rounded-xl border border-neutral-200/60">
-            <button
-              onClick={() => setCurrentView('flipbook')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
-                currentView === 'flipbook'
-                  ? 'bg-white text-neutral-900 shadow-xs font-bold'
-                  : 'text-neutral-500 hover:text-neutral-900'
-              }`}
-              title="Interactive 3D Flipbook"
-            >
-              <BookOpen className="w-3.5 h-3.5 text-amber-600" />
-              <span className="hidden xs:inline">Flipbook</span>
-            </button>
-            <button
-              onClick={() => setCurrentView('quick_menu')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
-                currentView === 'quick_menu'
-                  ? 'bg-white text-neutral-900 shadow-xs font-bold'
-                  : 'text-neutral-500 hover:text-neutral-900'
-              }`}
-              title="Quick Searchable List"
-            >
-              <ListOrdered className="w-3.5 h-3.5 text-neutral-700" />
-              <span className="hidden xs:inline">List</span>
-            </button>
-          </div>
+        {/* Zone 2: Actions (Waiter Buzzer & Cart) */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
 
           {/* Waiter Buzzer Button */}
           <button

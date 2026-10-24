@@ -254,7 +254,7 @@ export const FlipPageRenderer: React.FC<FlipPageRendererProps> = ({
                   <span className="flex-1 border-b border-dotted border-stone-300 mx-1.5 hidden xs:inline-block relative -top-1" />
 
                   {/* Price */}
-                  <span className={`font-mono text-xs sm:text-sm font-bold whitespace-nowrap ${
+                  <span className={`font-mono text-xs sm:text-sm font-bold whitespace-nowrap shrink-0 ${
                     item.isSoldOut ? 'line-through text-stone-400' : 'text-amber-800'
                   }`}>
                     {design.currencySymbol}{item.price.toLocaleString()}
