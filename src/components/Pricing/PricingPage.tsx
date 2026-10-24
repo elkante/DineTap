@@ -13,7 +13,7 @@ import {
   CreditCard,
   ChevronDown
 } from 'lucide-react';
-import { getStoredPlans, PlanTier } from '../../utils/pricingConfig';
+import { getStoredPlans, syncRemotePlans, PLANS_UPDATED_EVENT, PlanTier } from '../../utils/pricingConfig';
 
 interface PricingPageProps {
   onBackToHome: () => void;
@@ -28,8 +28,24 @@ export const PricingPage: React.FC<PricingPageProps> = ({
 }) => {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [plans, setPlans] = useState<PlanTier[]>(() => getStoredPlans());
 
-  const plans: PlanTier[] = getStoredPlans();
+  useEffect(() => {
+    const handleUpdate = () => {
+      setPlans(getStoredPlans());
+    };
+    window.addEventListener('storage', handleUpdate);
+    window.addEventListener(PLANS_UPDATED_EVENT, handleUpdate);
+
+    syncRemotePlans().then(livePlans => {
+      if (livePlans) setPlans(livePlans);
+    });
+
+    return () => {
+      window.removeEventListener('storage', handleUpdate);
+      window.removeEventListener(PLANS_UPDATED_EVENT, handleUpdate);
+    };
+  }, []);
 
   const toggleFaq = (idx: number) => {
     setOpenFaq(openFaq === idx ? null : idx);

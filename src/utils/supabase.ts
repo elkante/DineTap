@@ -261,12 +261,21 @@ export async function registerRestaurant(data: {
   // 1. Try Supabase Auth
   if (supabase && data.password && data.email) {
     try {
-      const { data: authData } = await supabase.auth.signUp({
+      const { data: authData, error: authErr } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
       });
       if (authData?.user) {
         ownerId = authData.user.id;
+      } else if (authErr && (authErr.message?.includes('already registered') || authErr.message?.includes('exists'))) {
+        // User already in auth.users; try to log in to obtain ownerId
+        const { data: signInData } = await supabase.auth.signInWithPassword({
+          email: data.email,
+          password: data.password,
+        });
+        if (signInData?.user) {
+          ownerId = signInData.user.id;
+        }
       }
     } catch (e) {
       console.warn('Supabase auth signup attempt:', e);
@@ -276,7 +285,8 @@ export async function registerRestaurant(data: {
   // 2. Insert into Supabase restaurants table
   if (supabase) {
     try {
-      const { error: insErr } = await supabase.from('restaurants').insert([
+      // First attempt: include plan and table_limit
+      let { error: insErr } = await supabase.from('restaurants').insert([
         {
           id: newId,
           owner_id: ownerId,
@@ -289,6 +299,24 @@ export async function registerRestaurant(data: {
           table_limit: initialTableLimit,
         }
       ]);
+
+      // If 'plan' or 'table_limit' columns do not exist in Supabase (PostgreSQL error 42703),
+      // retry with base schema columns so restaurant creation ALWAYS succeeds!
+      if (insErr && (insErr.code === '42703' || insErr.message?.includes('column') || insErr.message?.includes('plan'))) {
+        console.warn('Note: restaurants.plan column not yet added to Supabase. Inserting with base schema.');
+        const retry = await supabase.from('restaurants').insert([
+          {
+            id: newId,
+            owner_id: ownerId,
+            name: data.name.trim(),
+            slug: cleanSlug,
+            tagline: data.tagline?.trim() || 'Kitchen & Bar',
+            logo: data.logo || '🛡️',
+            currency: data.currency || '₦',
+          }
+        ]);
+        insErr = retry.error;
+      }
 
       if (insErr) {
         // If slug conflict
@@ -586,6 +614,7 @@ export async function deleteDishFromSupabase(itemId: string): Promise<void> {
  * Fetch all registered restaurants from Supabase for Super Admin
  */
 export async function fetchAllRestaurantsFromSupabase(): Promise<RestaurantTenant[]> {
+  const localList = getStoredRestaurants();
   if (supabase) {
     try {
       const { data: rRows, error: rErr } = await supabase
@@ -604,13 +633,30 @@ export async function fetchAllRestaurantsFromSupabase(): Promise<RestaurantTenan
           });
         }
 
-        return rRows.map(r => mapDbRowToRestaurant(r, itemsByRestId[r.id] || []));
+        const dbRestaurants = rRows.map(r => {
+          const mapped = mapDbRowToRestaurant(r, itemsByRestId[r.id] || []);
+          // Check local cache for client-side plan / limit overrides
+          const cached = localList.find(c => c.id === r.id || c.slug === r.slug);
+          if (cached) {
+            if (cached.plan && !r.plan) mapped.plan = cached.plan;
+            if (cached.tableLimit !== undefined && r.table_limit === undefined) mapped.tableLimit = cached.tableLimit;
+          }
+          return mapped;
+        });
+
+        // Merge any local-only restaurants that haven't been pushed to Supabase yet
+        const dbSlugs = new Set(dbRestaurants.map(r => r.slug.toLowerCase()));
+        const localOnly = localList.filter(l => !dbSlugs.has(l.slug.toLowerCase()));
+        const combined = [...dbRestaurants, ...localOnly];
+
+        saveStoredRestaurants(combined);
+        return combined;
       }
     } catch (e) {
       console.warn('Super Admin fetch all restaurants error:', e);
     }
   }
-  return getStoredRestaurants();
+  return localList;
 }
 
 /**
@@ -640,13 +686,50 @@ export async function updateRestaurantPlanInSupabase(
 
   if (!supabase) return;
   try {
-    await supabase.from('restaurants').update({
+    const { error } = await supabase.from('restaurants').update({
       plan,
       table_limit: tableLimit  // store null = unlimited
     }).eq('id', restaurantId);
+
+    if (error && (error.code === '42703' || error.message?.includes('column'))) {
+      console.warn('Note: restaurants.plan column not yet in Supabase schema. Saved in local cache.');
+    }
   } catch (e) {
     console.warn('Update restaurant plan error:', e);
   }
+}
+
+/**
+ * Cloud Settings Sync (for subscription plans & platform configurations)
+ */
+export async function savePlatformSettingsToSupabase(key: string, value: any): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('platform_settings').upsert({
+      key,
+      value,
+      updated_at: new Date().toISOString()
+    });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function fetchPlatformSettingsFromSupabase(key: string): Promise<any | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('platform_settings')
+      .select('value')
+      .eq('key', key)
+      .maybeSingle();
+
+    if (data && !error) return data.value;
+  } catch {
+    // Fall back to local
+  }
+  return null;
 }
 
 export async function deleteRestaurantFromSupabase(restaurantId: string): Promise<void> {

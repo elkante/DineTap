@@ -16,11 +16,17 @@ CREATE TABLE IF NOT EXISTS public.restaurants (
     tagline TEXT DEFAULT 'Fresh flavours and signature dishes',
     logo TEXT DEFAULT '🍽️',
     currency TEXT DEFAULT '₦',
+    plan TEXT DEFAULT 'basic',
+    table_limit INT DEFAULT NULL,
     address TEXT DEFAULT '',
     phone TEXT DEFAULT '',
     opening_hours TEXT DEFAULT '10:00 AM - 10:00 PM',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Idempotent column additions for existing tables
+ALTER TABLE public.restaurants ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'basic';
+ALTER TABLE public.restaurants ADD COLUMN IF NOT EXISTS table_limit INT DEFAULT NULL;
 
 -- 2. Menu Items Table
 CREATE TABLE IF NOT EXISTS public.menu_items (
@@ -64,13 +70,26 @@ CREATE TABLE IF NOT EXISTS public.waiter_calls (
     status TEXT DEFAULT 'active' CHECK (status IN ('active', 'resolved'))
 );
 
+-- 5. Platform Settings (Global SaaS configuration, dynamic pricing & plan rates)
+CREATE TABLE IF NOT EXISTS public.platform_settings (
+    key TEXT PRIMARY KEY,
+    value JSONB NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.restaurants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.menu_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.waiter_calls ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.platform_settings ENABLE ROW LEVEL SECURITY;
 
 -- Idempotent Security Policies (Drops existing before creating to prevent duplicate policy errors)
+DROP POLICY IF EXISTS "Public platform settings read" ON public.platform_settings;
+CREATE POLICY "Public platform settings read" ON public.platform_settings FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "Public platform settings write" ON public.platform_settings;
+CREATE POLICY "Public platform settings write" ON public.platform_settings FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 DROP POLICY IF EXISTS "Public restaurants read" ON public.restaurants;
 CREATE POLICY "Public restaurants read" ON public.restaurants FOR SELECT TO anon, authenticated USING (true);
 

@@ -92,6 +92,9 @@ export const DEFAULT_PLANS: PlanTier[] = [
   }
 ];
 
+import { savePlatformSettingsToSupabase, fetchPlatformSettingsFromSupabase } from './supabase';
+
+export const PLANS_UPDATED_EVENT = 'tapmenu_plans_updated';
 const STORAGE_KEY_PLANS = 'tapmenu_subscription_plans_v2';
 
 export function getStoredPlans(): PlanTier[] {
@@ -112,9 +115,27 @@ export function getStoredPlans(): PlanTier[] {
 export function saveStoredPlans(plans: PlanTier[]): void {
   try {
     localStorage.setItem(STORAGE_KEY_PLANS, JSON.stringify(plans));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(PLANS_UPDATED_EVENT, { detail: plans }));
+    }
+    // Attempt async cloud sync to Supabase (if platform_settings exists)
+    savePlatformSettingsToSupabase('subscription_plans', plans).catch(() => {});
   } catch (e) {
     console.warn('Failed to save plans', e);
   }
+}
+
+export async function syncRemotePlans(): Promise<PlanTier[]> {
+  try {
+    const remote = await fetchPlatformSettingsFromSupabase('subscription_plans');
+    if (remote && Array.isArray(remote) && remote.length >= 4) {
+      saveStoredPlans(remote);
+      return remote;
+    }
+  } catch (e) {
+    console.warn('Remote plans sync fallback', e);
+  }
+  return getStoredPlans();
 }
 
 export function resetPlansToDefault(): PlanTier[] {

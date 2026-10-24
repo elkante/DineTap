@@ -14,6 +14,7 @@ import {
   getStoredPlans, 
   saveStoredPlans, 
   resetPlansToDefault, 
+  syncRemotePlans,
   PlanTier 
 } from '../../utils/pricingConfig';
 import { 
@@ -94,6 +95,33 @@ export const SuperAdminView: React.FC = () => {
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('pass1234');
   const [newPlan, setNewPlan] = useState<'Basic' | 'Standard' | 'Premium' | 'Enterprise'>('Standard');
+
+  // Load all restaurants from Supabase (merging local cache)
+  const loadAllTenants = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchAllRestaurantsFromSupabase();
+      setTenants(data);
+    } catch (err) {
+      console.warn('Failed to load restaurants from Supabase:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Sync latest remote plans on mount
+  useEffect(() => {
+    syncRemotePlans().then(live => {
+      if (live) setPlans(live);
+    });
+  }, []);
+
+  // Fetch tenants whenever SuperAdmin becomes unlocked
+  useEffect(() => {
+    if (isUnlocked) {
+      loadAllTenants();
+    }
+  }, [isUnlocked]);
 
   // Verify cryptographic session on load
   useEffect(() => {
@@ -335,14 +363,19 @@ export const SuperAdminView: React.FC = () => {
   }, 0);
 
   const handleUpdatePlan = (planId: string, updates: Partial<PlanTier>) => {
-    setPlans(prev => prev.map(p => p.id === planId ? { ...p, ...updates } : p));
+    setPlans(prev => {
+      const updated = prev.map(p => p.id === planId ? { ...p, ...updates } : p);
+      // Immediately persist to storage and dispatch event so updates reflect across the entire site
+      saveStoredPlans(updated);
+      return updated;
+    });
     setHasPlanChanges(true);
   };
 
   const handleSavePlans = () => {
     saveStoredPlans(plans);
     setHasPlanChanges(false);
-    showNotification('🎉 Public Pricing Plans saved! Updates live across the platform.');
+    showNotification('🎉 Pricing plans saved! Live across all pages.');
   };
 
   const handleResetPlans = () => {
