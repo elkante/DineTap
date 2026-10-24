@@ -3,17 +3,25 @@ import { AppProvider, useApp } from './context/AppContext';
 import { TopNav } from './components/TopNav';
 import { FlipbookViewer } from './components/Flipbook/FlipbookViewer';
 import { QuickMenuView } from './components/QuickMenu/QuickMenuView';
-import { MenuBookBuilder } from './components/Editor/MenuBookBuilder';
-import { NfcQrManager } from './components/NfcQr/NfcQrManager';
-import { KitchenOrdersView } from './components/Orders/KitchenOrdersView';
-import { SuperAdminView } from './components/SuperAdmin/SuperAdminView';
 import { CustomerCartDrawer } from './components/CustomerCartDrawer';
 import { WaiterCallModal } from './components/WaiterCallModal';
+import { RestaurantDashboard } from './components/Dashboard/RestaurantDashboard';
+import { AuthPortal } from './components/Auth/AuthPortal';
 import { FoodItem } from './types';
-import { Sparkles, X, Plus, Minus, CheckCircle } from 'lucide-react';
+import { Sparkles, Plus, Minus, X, AlertCircle, Store, ArrowRight } from 'lucide-react';
 
 const MainContent: React.FC = () => {
-  const { currentView, notificationMsg, activeRestaurant, addToCart } = useApp();
+  const { 
+    currentView, 
+    notificationMsg, 
+    activeRestaurant, 
+    addToCart,
+    isCustomerRoute,
+    restaurantNotFound,
+    requestedSlug,
+    ownerSession 
+  } = useApp();
+
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const [waiterModalOpen, setWaiterModalOpen] = useState(false);
   const [modalItem, setModalItem] = useState<FoodItem | null>(null);
@@ -32,6 +40,62 @@ const MainContent: React.FC = () => {
     setModalItem(null);
   };
 
+  // =========================================================================
+  // ROUTE 1: Customer visits an invalid / unknown slug
+  // =========================================================================
+  if (isCustomerRoute && restaurantNotFound) {
+    return (
+      <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center p-6 text-center font-sans">
+        <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mb-4">
+          <Store className="w-8 h-8" />
+        </div>
+        <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight">Restaurant Not Found</h1>
+        <p className="text-xs sm:text-sm text-neutral-400 mt-2 max-w-sm">
+          No restaurant is registered with slug <span className="font-mono text-amber-400">"{requestedSlug}"</span>.
+        </p>
+        <div className="mt-6 flex flex-col sm:flex-row gap-3">
+          <a
+            href="/"
+            className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5"
+          >
+            <span>Create Your Restaurant Menu</span>
+            <ArrowRight className="w-4 h-4" />
+          </a>
+          <a
+            href="/?r=demo&table=Table+5"
+            className="px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 font-bold rounded-xl text-xs border border-neutral-800 transition-colors"
+          >
+            Explore Demo Restaurant
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // ROUTE 2: Restaurant Owner (No ?r= slug in URL)
+  // =========================================================================
+  if (!isCustomerRoute) {
+    if (ownerSession) {
+      return (
+        <>
+          {notificationMsg && (
+            <div className="fixed bottom-6 right-6 z-50 bg-neutral-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-neutral-700 text-xs font-semibold flex items-center gap-2.5 animate-in fade-in slide-in-from-bottom duration-200">
+              <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>{notificationMsg}</span>
+            </div>
+          )}
+          <RestaurantDashboard />
+        </>
+      );
+    }
+    // Owner is not logged in: show the AuthPortal (Create restaurant / Login)
+    return <AuthPortal />;
+  }
+
+  // =========================================================================
+  // ROUTE 3: Customer Menu (e.g. ?r=lagos-bites&table=Table+5)
+  // =========================================================================
   return (
     <div className="min-h-screen bg-neutral-100 flex flex-col font-sans">
       {/* Toast Notification */}
@@ -42,35 +106,34 @@ const MainContent: React.FC = () => {
         </div>
       )}
 
-      {/* Top Navigation */}
+      {/* Customer Header */}
       <TopNav
         onOpenCart={() => setCartDrawerOpen(true)}
         onOpenWaiterModal={() => setWaiterModalOpen(true)}
       />
 
-      {/* Main View Router */}
+      {/* Customer View Modes: 3D Flipbook or Quick List */}
       <main className="flex-1">
-        {currentView === 'flipbook' && <FlipbookViewer />}
-        {currentView === 'quick_menu' && <QuickMenuView onSelectItem={handleOpenItem} />}
-        {currentView === 'editor' && <MenuBookBuilder />}
-        {currentView === 'nfc_qr' && <NfcQrManager />}
-        {currentView === 'orders' && <KitchenOrdersView />}
-        {currentView === 'super_admin' && <SuperAdminView />}
+        {currentView === 'flipbook' ? (
+          <FlipbookViewer />
+        ) : (
+          <QuickMenuView onSelectItem={handleOpenItem} />
+        )}
       </main>
 
-      {/* Slide-Over Cart Drawer */}
+      {/* Customer Slide-Over Cart Drawer */}
       <CustomerCartDrawer
         isOpen={cartDrawerOpen}
         onClose={() => setCartDrawerOpen(false)}
       />
 
-      {/* Waiter Assistance Buzzer Modal */}
+      {/* Customer Waiter Assistance Buzzer Modal */}
       <WaiterCallModal
         isOpen={waiterModalOpen}
         onClose={() => setWaiterModalOpen(false)}
       />
 
-      {/* Quick Menu Item Detail Modal */}
+      {/* Dish Customization Modal */}
       {modalItem && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl">
@@ -89,7 +152,7 @@ const MainContent: React.FC = () => {
                   <X className="w-4 h-4" />
                 </button>
                 {modalItem.badge && (
-                  <span className="absolute bottom-3 left-3 px-2.5 py-1 bg-amber-500 text-neutral-950 font-bold text-xs rounded-md shadow">
+                  <span className="absolute bottom-3 left-3 px-2.5 py-1 bg-amber-500 text-neutral-950 font-bold text-xs rounded-lg shadow-sm">
                     {modalItem.badge}
                   </span>
                 )}

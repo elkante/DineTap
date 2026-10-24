@@ -13,7 +13,15 @@ import {
 } from '../types';
 import { INITIAL_RESTAURANTS, TEMPLATE_PRESETS } from '../data/initialData';
 import { playKitchenChime } from '../utils/audio';
-import { syncOrderToSupabase, syncWaiterCallToSupabase } from '../utils/supabase';
+import { 
+  syncOrderToSupabase, 
+  syncWaiterCallToSupabase, 
+  getActiveSession, 
+  setActiveSession as saveActiveSession, 
+  OwnerSession,
+  getStoredRestaurants,
+  saveStoredRestaurants
+} from '../utils/supabase';
 
 export type AppViewMode = 'flipbook' | 'quick_menu' | 'editor' | 'nfc_qr' | 'orders' | 'super_admin';
 
@@ -29,29 +37,37 @@ interface AppContextType {
   waiterCalls: WaiterCall[];
   notificationMsg: string | null;
   
-  // Navigation / View actions
-  setCurrentView: (view: AppViewMode) => void;
-  switchRestaurant: (id: string) => void;
-  setTableContext: (table: string | null, isNfc?: boolean) => void;
-  simulateNfcTap: (tableNumber: string) => void;
-  showNotification: (msg: string) => void;
+  // Multi-tenant & Routing
+  isCustomerRoute: boolean;
+  restaurantNotFound: boolean;
+  requestedSlug: string | null;
+  ownerSession: OwnerSession | null;
 
-  // Editor Actions
-  updateRestaurantMeta: (data: Partial<RestaurantTenant>) => void;
+  // Setters
+  setCurrentView: (view: AppViewMode) => void;
+  switchRestaurant: (idOrSlug: string) => void;
+  showNotification: (msg: string) => void;
+  setCurrentTable: (table: string) => void;
+  logoutOwner: () => void;
+
+  // Restaurant Design & Meta
+  updateRestaurantMeta: (meta: Partial<RestaurantTenant>) => void;
   updateDesign: (design: Partial<MenuBookDesign>) => void;
   applyTemplate: (templateId: MenuTemplateId) => void;
-  updatePage: (pageId: string, data: Partial<MenuBookPage>) => void;
-  addPage: (layout?: PageLayoutType) => void;
+
+  // Pages & Items
+  updatePage: (pageId: string, updates: Partial<MenuBookPage>) => void;
+  addPage: (layout: PageLayoutType) => void;
   deletePage: (pageId: string) => void;
   duplicatePage: (pageId: string) => void;
-  reorderPages: (fromIdx: number, toIdx: number) => void;
+  reorderPages: (fromIndex: number, toIndex: number) => void;
   addFoodItem: (pageId: string, item: Omit<FoodItem, 'id'>) => void;
-  updateFoodItem: (pageId: string, itemId: string, data: Partial<FoodItem>) => void;
+  updateFoodItem: (pageId: string, itemId: string, updates: Partial<FoodItem>) => void;
   deleteFoodItem: (pageId: string, itemId: string) => void;
   toggleSoldOut: (pageId: string, itemId: string) => void;
 
-  // Table & NFC Actions
-  registerTableTag: (tableNumber: string, label: string, section: string, ntagSerial: string) => void;
+  // NFC & Tables
+  registerTableTag: (tableNumber: string, label: string, section: string, nfcSerial: string) => void;
   updateTableStatus: (tableId: string, status: NfcStatus) => void;
   replaceDamagedTag: (tableId: string, newSerial: string) => void;
 
@@ -60,7 +76,7 @@ interface AppContextType {
   updateCartItemQuantity: (index: number, quantity: number) => void;
   removeFromCart: (index: number) => void;
   clearCart: () => void;
-  placeOrder: (customerName: string) => Order | null;
+  placeOrder: (customerName: string, paymentMethod?: 'pos' | 'cash' | 'transfer') => Order | null;
   callWaiter: (reason: WaiterCall['reason']) => void;
   resolveWaiterCall: (id: string) => void;
   updateOrderStatus: (orderId: string, status: Order['status']) => void;
@@ -72,97 +88,107 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null);
 
-const STORAGE_KEY_RESTAURANTS = 'dinetap_restaurants_v1';
-const STORAGE_KEY_ORDERS = 'dinetap_orders_v1';
-const STORAGE_KEY_CALLS = 'dinetap_calls_v1';
+const STORAGE_KEY_ORDERS = 'dinetap_orders_v2';
+const STORAGE_KEY_CALLS = 'dinetap_calls_v2';
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Load restaurants: check local storage first, then fallback to initial template
   const [restaurants, setRestaurants] = useState<RestaurantTenant[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_RESTAURANTS);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.warn('Storage read failed', e);
-    }
+    const stored = getStoredRestaurants();
+    if (stored.length > 0) return stored;
     return INITIAL_RESTAURANTS;
   });
 
-  const [activeRestaurantId, setActiveRestaurantId] = useState<string>('rest-lagos-bites');
+  const [activeRestaurantId, setActiveRestaurantId] = useState<string>(() => {
+    const stored = getStoredRestaurants();
+    if (stored.length > 0) return stored[0].id;
+    return INITIAL_RESTAURANTS[0]?.id || 'rest-lagos-bites';
+  });
+
   const [currentView, setCurrentView] = useState<AppViewMode>('flipbook');
-  const [currentTable, setCurrentTable] = useState<string | null>('Table 04');
-  const [isNfcSource, setIsNfcSource] = useState<boolean>(true);
+  const [currentTable, setCurrentTable] = useState<string | null>(null);
+  const [isNfcSource, setIsNfcSource] = useState<boolean>(false);
   const [cart, setCart] = useState<CartItem[]>([]);
+
+  // Real Orders (NO mock fake data)
   const [orders, setOrders] = useState<Order[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_ORDERS);
       if (saved) return JSON.parse(saved);
-    } catch {
-      // fallback
-    }
-    return [
-      {
-        id: 'ord-101',
-        restaurantId: 'rest-lagos-bites',
-        tableNumber: 'Table 04',
-        customerName: 'Chidi Okafor',
-        items: [
-          {
-            foodItem: INITIAL_RESTAURANTS[0].pages[1].items[0],
-            quantity: 2,
-            notes: 'Extra yaji pepper on the side'
-          },
-          {
-            foodItem: INITIAL_RESTAURANTS[0].pages[2].items[0],
-            quantity: 1,
-            notes: 'Well charred chicken please'
-          }
-        ],
-        total: 15500,
-        status: 'preparing',
-        createdAt: '12 mins ago',
-        source: 'nfc'
-      }
-    ];
+    } catch {}
+    return [];
   });
+
   const [waiterCalls, setWaiterCalls] = useState<WaiterCall[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_CALLS);
       if (saved) return JSON.parse(saved);
-    } catch {
-      // fallback
-    }
+    } catch {}
     return [];
   });
+
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
 
-  // Check URL query parameters on initial mount (e.g., ?tenant=lagos-bites&table=Table+02&src=nfc)
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const tenantParam = params.get('tenant');
-      const tableParam = params.get('table');
-      const srcParam = params.get('src');
+  // Multi-tenant URL state
+  const [isCustomerRoute, setIsCustomerRoute] = useState(false);
+  const [restaurantNotFound, setRestaurantNotFound] = useState(false);
+  const [requestedSlug, setRequestedSlug] = useState<string | null>(null);
+  const [ownerSession, setOwnerSessionState] = useState<OwnerSession | null>(() => getActiveSession());
 
-      if (tenantParam) {
-        const found = restaurants.find(r => r.slug === tenantParam || r.id === tenantParam);
-        if (found) setActiveRestaurantId(found.id);
+  // URL Query Routing on initial mount & search change
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const slugParam = params.get('r') || params.get('tenant') || params.get('restaurant');
+    const tableParam = params.get('table');
+    const srcParam = params.get('src');
+
+    if (slugParam) {
+      setIsCustomerRoute(true);
+      setRequestedSlug(slugParam);
+
+      // Find matching restaurant
+      const match = restaurants.find(r => 
+        r.slug.toLowerCase() === slugParam.toLowerCase() || 
+        r.id === slugParam
+      );
+
+      if (match) {
+        setActiveRestaurantId(match.id);
+        setRestaurantNotFound(false);
+      } else {
+        setRestaurantNotFound(true);
       }
+
       if (tableParam) {
         setCurrentTable(decodeURIComponent(tableParam));
+      } else {
+        setCurrentTable('Table 1');
       }
+
       if (srcParam === 'nfc') {
         setIsNfcSource(true);
+      }
+    } else {
+      setIsCustomerRoute(false);
+      setRestaurantNotFound(false);
+
+      // If owner session exists, lock active restaurant to their restaurant
+      const session = getActiveSession();
+      if (session) {
+        setOwnerSessionState(session);
+        const owned = restaurants.find(r => r.id === session.restaurantId || r.slug === session.restaurantSlug);
+        if (owned) {
+          setActiveRestaurantId(owned.id);
+        }
       }
     }
   }, [restaurants]);
 
   // Persist restaurants
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_RESTAURANTS, JSON.stringify(restaurants));
-    } catch (e) {
-      console.warn('Storage write failed', e);
-    }
+    saveStoredRestaurants(restaurants);
   }, [restaurants]);
 
   // Persist orders
@@ -170,115 +196,88 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(orders));
     } catch (e) {
-      console.warn('Storage write failed', e);
+      console.warn('Orders storage write error', e);
     }
   }, [orders]);
 
   // Active restaurant reference
-  const activeRestaurant = restaurants.find(r => r.id === activeRestaurantId) || restaurants[0];
+  const activeRestaurant = restaurants.find(r => r.id === activeRestaurantId) || restaurants[0] || INITIAL_RESTAURANTS[0];
 
   const showNotification = (msg: string) => {
     setNotificationMsg(msg);
     setTimeout(() => {
       setNotificationMsg(null);
-    }, 3800);
+    }, 3200);
   };
 
-  const switchRestaurant = (id: string) => {
-    const found = restaurants.find(r => r.id === id);
+  const switchRestaurant = (idOrSlug: string) => {
+    const found = restaurants.find(r => r.id === idOrSlug || r.slug.toLowerCase() === idOrSlug.toLowerCase());
     if (found) {
-      setActiveRestaurantId(id);
+      setActiveRestaurantId(found.id);
       showNotification(`Switched to ${found.name}`);
     }
   };
 
-  const setTableContext = (table: string | null, isNfc = false) => {
-    setCurrentTable(table);
-    setIsNfcSource(isNfc);
+  const logoutOwner = () => {
+    saveActiveSession(null);
+    setOwnerSessionState(null);
+    window.location.href = window.location.pathname;
   };
 
-  const simulateNfcTap = (tableNumber: string) => {
-    setCurrentTable(tableNumber);
-    setIsNfcSource(true);
-    setCurrentView('flipbook');
-    showNotification(`⚡ NTAG213 Tap Detected! Loaded ${activeRestaurant.name} at ${tableNumber}`);
-  };
-
-  const updateRestaurantMeta = (data: Partial<RestaurantTenant>) => {
-    setRestaurants(prev => prev.map(r => r.id === activeRestaurantId ? { ...r, ...data } : r));
-    showNotification('Restaurant settings saved');
-  };
-
-  const updateDesign = (design: Partial<MenuBookDesign>) => {
+  const updateRestaurantMeta = (meta: Partial<RestaurantTenant>) => {
     setRestaurants(prev => prev.map(r => {
-      if (r.id === activeRestaurantId) {
-        return {
-          ...r,
-          design: { ...r.design, ...design }
-        };
-      }
-      return r;
+      if (r.id !== activeRestaurantId) return r;
+      return { ...r, ...meta };
+    }));
+    showNotification('Restaurant profile updated');
+  };
+
+  const updateDesign = (designUpdates: Partial<MenuBookDesign>) => {
+    setRestaurants(prev => prev.map(r => {
+      if (r.id !== activeRestaurantId) return r;
+      return {
+        ...r,
+        design: { ...r.design, ...designUpdates }
+      };
     }));
   };
 
   const applyTemplate = (templateId: MenuTemplateId) => {
     const preset = TEMPLATE_PRESETS[templateId];
     if (!preset) return;
-
-    setRestaurants(prev => prev.map(r => {
-      if (r.id === activeRestaurantId) {
-        return {
-          ...r,
-          design: {
-            ...preset.design,
-            currencySymbol: r.design.currencySymbol || '₦',
-          }
-        };
-      }
-      return r;
-    }));
-    showNotification(`Applied ${preset.name} template style`);
+    updateDesign({
+      ...preset.design,
+      currencySymbol: activeRestaurant.design.currencySymbol,
+    });
+    showNotification(`Applied "${preset.name}" visual theme`);
   };
 
-  const updatePage = (pageId: string, data: Partial<MenuBookPage>) => {
+  const updatePage = (pageId: string, updates: Partial<MenuBookPage>) => {
     setRestaurants(prev => prev.map(r => {
-      if (r.id === activeRestaurantId) {
-        return {
-          ...r,
-          pages: r.pages.map(p => p.id === pageId ? { ...p, ...data } : p)
-        };
-      }
-      return r;
+      if (r.id !== activeRestaurantId) return r;
+      return {
+        ...r,
+        pages: r.pages.map(p => p.id === pageId ? { ...p, ...updates } : p)
+      };
     }));
   };
 
-  const addPage = (layout: PageLayoutType = 'two_column_grid') => {
+  const addPage = (layout: PageLayoutType) => {
+    const newPageNum = activeRestaurant.pages.length + 1;
     const newPage: MenuBookPage = {
       id: `p-${Date.now()}`,
-      pageNumber: activeRestaurant.pages.length + 1,
-      title: 'New Menu Section',
-      subtitle: 'Add culinary specialities to this page',
+      pageNumber: newPageNum,
+      title: `Page ${newPageNum}`,
+      subtitle: 'Delicious courses crafted fresh daily',
       layout,
-      items: [
-        {
-          id: `it-${Date.now()}`,
-          name: 'House Speciality',
-          description: 'Crafted with premium ingredients and seasonal garnish.',
-          price: 4500,
-          badge: 'Popular',
-          prepTime: '15 min'
-        }
-      ]
+      items: []
     };
 
     setRestaurants(prev => prev.map(r => {
-      if (r.id === activeRestaurantId) {
-        const pages = [...r.pages, newPage].map((p, idx) => ({ ...p, pageNumber: idx + 1 }));
-        return { ...r, pages };
-      }
-      return r;
+      if (r.id !== activeRestaurantId) return r;
+      return { ...r, pages: [...r.pages, newPage] };
     }));
-    showNotification('New page added to menu book');
+    showNotification(`Added new ${layout} page`);
   };
 
   const deletePage = (pageId: string) => {
@@ -287,54 +286,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     setRestaurants(prev => prev.map(r => {
-      if (r.id === activeRestaurantId) {
-        const pages = r.pages.filter(p => p.id !== pageId).map((p, idx) => ({ ...p, pageNumber: idx + 1 }));
-        return { ...r, pages };
-      }
-      return r;
+      if (r.id !== activeRestaurantId) return r;
+      const filtered = r.pages.filter(p => p.id !== pageId);
+      const renumbered = filtered.map((p, idx) => ({ ...p, pageNumber: idx + 1 }));
+      return { ...r, pages: renumbered };
     }));
     showNotification('Page removed');
   };
 
   const duplicatePage = (pageId: string) => {
-    const targetPage = activeRestaurant.pages.find(p => p.id === pageId);
-    if (!targetPage) return;
+    const target = activeRestaurant.pages.find(p => p.id === pageId);
+    if (!target) return;
 
-    const dup: MenuBookPage = {
-      ...targetPage,
+    const duplicated: MenuBookPage = {
+      ...target,
       id: `p-${Date.now()}`,
-      title: `${targetPage.title} (Copy)`,
-      items: targetPage.items.map(it => ({ ...it, id: `it-${Date.now()}-${Math.random().toString(36).substring(7)}` }))
+      title: `${target.title} (Copy)`,
+      items: target.items.map(it => ({ ...it, id: `it-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` }))
     };
 
     setRestaurants(prev => prev.map(r => {
-      if (r.id === activeRestaurantId) {
-        const index = r.pages.findIndex(p => p.id === pageId);
-        const newPages = [...r.pages];
-        newPages.splice(index + 1, 0, dup);
-        return {
-          ...r,
-          pages: newPages.map((p, idx) => ({ ...p, pageNumber: idx + 1 }))
-        };
-      }
-      return r;
+      if (r.id !== activeRestaurantId) return r;
+      const idx = r.pages.findIndex(p => p.id === pageId);
+      const newPages = [...r.pages];
+      newPages.splice(idx + 1, 0, duplicated);
+      return {
+        ...r,
+        pages: newPages.map((p, i) => ({ ...p, pageNumber: i + 1 }))
+      };
     }));
     showNotification('Page duplicated');
   };
 
-  const reorderPages = (fromIdx: number, toIdx: number) => {
-    if (fromIdx < 0 || toIdx < 0 || fromIdx >= activeRestaurant.pages.length || toIdx >= activeRestaurant.pages.length) return;
+  const reorderPages = (fromIndex: number, toIndex: number) => {
     setRestaurants(prev => prev.map(r => {
-      if (r.id === activeRestaurantId) {
-        const newPages = [...r.pages];
-        const [moved] = newPages.splice(fromIdx, 1);
-        newPages.splice(toIdx, 0, moved);
-        return {
-          ...r,
-          pages: newPages.map((p, idx) => ({ ...p, pageNumber: idx + 1 }))
-        };
-      }
-      return r;
+      if (r.id !== activeRestaurantId) return r;
+      const pagesCopy = [...r.pages];
+      const [moved] = pagesCopy.splice(fromIndex, 1);
+      pagesCopy.splice(toIndex, 0, moved);
+      return {
+        ...r,
+        pages: pagesCopy.map((p, idx) => ({ ...p, pageNumber: idx + 1 }))
+      };
     }));
   };
 
@@ -345,130 +338,113 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setRestaurants(prev => prev.map(r => {
-      if (r.id === activeRestaurantId) {
-        return {
-          ...r,
-          pages: r.pages.map(p => {
-            if (p.id === pageId) {
-              return { ...p, items: [...p.items, newItem] };
-            }
-            return p;
-          })
-        };
-      }
-      return r;
+      if (r.id !== activeRestaurantId) return r;
+      return {
+        ...r,
+        pages: r.pages.map(p => {
+          if (p.id !== pageId) return p;
+          return { ...p, items: [...p.items, newItem] };
+        })
+      };
     }));
-    showNotification(`Added "${newItem.name}" to page`);
+    showNotification(`Added "${newItem.name}" to menu`);
   };
 
-  const updateFoodItem = (pageId: string, itemId: string, data: Partial<FoodItem>) => {
+  const updateFoodItem = (pageId: string, itemId: string, updates: Partial<FoodItem>) => {
     setRestaurants(prev => prev.map(r => {
-      if (r.id === activeRestaurantId) {
-        return {
-          ...r,
-          pages: r.pages.map(p => {
-            if (p.id === pageId) {
-              return {
-                ...p,
-                items: p.items.map(it => it.id === itemId ? { ...it, ...data } : it)
-              };
-            }
-            return p;
-          })
-        };
-      }
-      return r;
+      if (r.id !== activeRestaurantId) return r;
+      return {
+        ...r,
+        pages: r.pages.map(p => {
+          if (p.id !== pageId) return p;
+          return {
+            ...p,
+            items: p.items.map(it => it.id === itemId ? { ...it, ...updates } : it)
+          };
+        })
+      };
     }));
   };
 
   const deleteFoodItem = (pageId: string, itemId: string) => {
     setRestaurants(prev => prev.map(r => {
-      if (r.id === activeRestaurantId) {
-        return {
-          ...r,
-          pages: r.pages.map(p => {
-            if (p.id === pageId) {
-              return { ...p, items: p.items.filter(it => it.id !== itemId) };
-            }
-            return p;
-          })
-        };
-      }
-      return r;
+      if (r.id !== activeRestaurantId) return r;
+      return {
+        ...r,
+        pages: r.pages.map(p => {
+          if (p.id !== pageId) return p;
+          return {
+            ...p,
+            items: p.items.filter(it => it.id !== itemId)
+          };
+        })
+      };
     }));
-    showNotification('Item removed');
+    showNotification('Item removed from menu');
   };
 
   const toggleSoldOut = (pageId: string, itemId: string) => {
     setRestaurants(prev => prev.map(r => {
-      if (r.id === activeRestaurantId) {
-        return {
-          ...r,
-          pages: r.pages.map(p => {
-            if (p.id === pageId) {
-              return {
-                ...p,
-                items: p.items.map(it => it.id === itemId ? { ...it, isSoldOut: !it.isSoldOut } : it)
-              };
-            }
-            return p;
-          })
-        };
-      }
-      return r;
+      if (r.id !== activeRestaurantId) return r;
+      return {
+        ...r,
+        pages: r.pages.map(p => {
+          if (p.id !== pageId) return p;
+          return {
+            ...p,
+            items: p.items.map(it => {
+              if (it.id !== itemId) return it;
+              const nextState = !it.isSoldOut;
+              showNotification(`"${it.name}" marked ${nextState ? 'Sold Out' : 'Available'}`);
+              return { ...it, isSoldOut: nextState };
+            })
+          };
+        })
+      };
     }));
   };
 
-  const registerTableTag = (tableNumber: string, label: string, section: string, ntagSerial: string) => {
+  const registerTableTag = (tableNumber: string, label: string, section: string, nfcSerial: string) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const newTable = {
+    const newTag: TableNfcTag = {
       id: `tbl-${Date.now()}`,
       tableNumber,
       label,
       section,
-      ntagSerial: ntagSerial || `04:${Math.random().toString(16).substring(2, 4).toUpperCase()}:${Math.random().toString(16).substring(2, 4).toUpperCase()}:11`,
-      nfcStatus: 'active' as NfcStatus,
+      ntagSerial: nfcSerial || `04:${Math.floor(Math.random() * 89 + 10)}:FF:${Math.floor(Math.random() * 89 + 10)}`,
+      nfcStatus: 'active',
       totalTaps: 0,
       totalScans: 0,
-      urlPayload: `${origin}/?tenant=${activeRestaurant.slug}&table=${encodeURIComponent(tableNumber)}&src=nfc`
+      urlPayload: `${origin}/?r=${activeRestaurant.slug}&table=${encodeURIComponent(tableNumber)}`
     };
 
     setRestaurants(prev => prev.map(r => {
-      if (r.id === activeRestaurantId) {
-        return {
-          ...r,
-          tables: [...r.tables, newTable]
-        };
-      }
-      return r;
+      if (r.id !== activeRestaurantId) return r;
+      return { ...r, tables: [...r.tables, newTag] };
     }));
-    showNotification(`Registered NTAG213 for ${tableNumber}`);
   };
 
   const updateTableStatus = (tableId: string, status: NfcStatus) => {
     setRestaurants(prev => prev.map(r => {
-      if (r.id === activeRestaurantId) {
-        return {
-          ...r,
-          tables: r.tables.map(t => t.id === tableId ? { ...t, nfcStatus: status } : t)
-        };
-      }
-      return r;
+      if (r.id !== activeRestaurantId) return r;
+      return {
+        ...r,
+        tables: r.tables.map(t => t.id === tableId ? { ...t, nfcStatus: status } : t)
+      };
     }));
-    showNotification(`Table tag status updated to ${status}`);
   };
 
   const replaceDamagedTag = (tableId: string, newSerial: string) => {
     setRestaurants(prev => prev.map(r => {
-      if (r.id === activeRestaurantId) {
-        return {
-          ...r,
-          tables: r.tables.map(t => t.id === tableId ? { ...t, ntagSerial: newSerial, nfcStatus: 'active' } : t)
-        };
-      }
-      return r;
+      if (r.id !== activeRestaurantId) return r;
+      return {
+        ...r,
+        tables: r.tables.map(t => {
+          if (t.id !== tableId) return t;
+          return { ...t, ntagSerial: newSerial, nfcStatus: 'active' };
+        })
+      };
     }));
-    showNotification('Replacement NTAG213 tag assigned and activated');
   };
 
   // Cart & Ordering
@@ -485,7 +461,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           foodItem: item,
           quantity: qty,
           notes: cleanNotes || undefined,
-          tableNumber: currentTable || 'Table 01'
+          tableNumber: currentTable || 'Table 1'
         }
       ];
     });
@@ -508,15 +484,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCart([]);
   };
 
-  const placeOrder = (customerName: string): Order | null => {
+  const placeOrder = (customerName: string, paymentMethod: 'pos' | 'cash' | 'transfer' = 'pos'): Order | null => {
     if (cart.length === 0) return null;
 
     const total = cart.reduce((sum, ci) => sum + ci.foodItem.price * ci.quantity, 0);
+    const orderTable = currentTable || 'Table 1';
+
     const newOrder: Order = {
       id: `ord-${Date.now().toString().slice(-4)}`,
       restaurantId: activeRestaurant.id,
-      tableNumber: currentTable || 'Table 01',
-      customerName: customerName.trim() || 'Guest Diner',
+      tableNumber: orderTable,
+      customerName: customerName.trim() || `Diner at ${orderTable}`,
       items: [...cart],
       total,
       status: 'pending',
@@ -528,22 +506,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     clearCart();
     playKitchenChime();
     syncOrderToSupabase(newOrder);
-    showNotification(`Order #${newOrder.id} placed! Kitchen alerted.`);
+    showNotification(`🎉 Order sent to ${activeRestaurant.name}'s kitchen from ${orderTable}!`);
     return newOrder;
   };
 
   const callWaiter = (reason: WaiterCall['reason']) => {
+    const tableNum = currentTable || 'Table 1';
     const newCall: WaiterCall = {
       id: `call-${Date.now()}`,
       restaurantId: activeRestaurant.id,
-      tableNumber: currentTable || 'Table 01',
+      tableNumber: tableNum,
       reason,
       timestamp: 'Just now',
       status: 'active'
     };
     setWaiterCalls(prev => [newCall, ...prev]);
     syncWaiterCallToSupabase(newCall);
-    showNotification(`🔔 Waiter called for ${currentTable || 'Table 01'}: ${reason}`);
+    showNotification(`🔔 Waiter buzzed for ${tableNum}: ${reason}`);
   };
 
   const resolveWaiterCall = (id: string) => {
@@ -557,27 +536,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const toggleTenantStatus = (tenantId: string) => {
     setRestaurants(prev => prev.map(r => {
-      if (r.id === tenantId) {
-        const nextStatus = r.status === 'active' ? 'suspended' : 'active';
-        return { ...r, status: nextStatus };
-      }
-      return r;
+      if (r.id !== tenantId) return r;
+      const nextStatus = r.status === 'active' ? 'suspended' : 'active';
+      return { ...r, status: nextStatus };
     }));
   };
 
   const createNewTenant = (name: string, templateId: MenuTemplateId) => {
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const cleanSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const newId = `rest-${Date.now()}`;
     const preset = TEMPLATE_PRESETS[templateId] || TEMPLATE_PRESETS.nigerian;
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
-    const newRestaurant: RestaurantTenant = {
-      id: `rest-${Date.now()}`,
-      slug,
+    const newRest: RestaurantTenant = {
+      id: newId,
+      slug: cleanSlug,
       name,
-      tagline: 'Modern Dining & Curated Menu',
+      tagline: 'Fresh Flavours & Quality Dining',
       logo: '🍽️',
       coverImage: '/src/assets/images/dish_jollof_chicken_1792837966503.jpg',
-      address: 'Lagos, Nigeria',
+      address: 'Main Street',
       phone: '+234 800 000 0000',
       openingHours: '10:00 AM - 10:00 PM',
       plan: 'Growth QR+Menu',
@@ -586,52 +563,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       allowOrdering: true,
       tableOrderingEnabled: true,
       design: { ...preset.design },
-      tables: [
-        {
-          id: `tbl-${Date.now()}`,
-          tableNumber: 'Table 01',
-          label: 'Main Table 01',
-          section: 'Dining Room',
-          ntagSerial: '04:FA:22:90:81:44:00',
-          nfcStatus: 'active',
-          totalTaps: 0,
-          totalScans: 0,
-          urlPayload: `${origin}/?tenant=${slug}&table=Table+01&src=nfc`
-        }
-      ],
-      pages: [
-        {
-          id: `p-${Date.now()}-1`,
-          pageNumber: 1,
-          title: 'Cover Page',
-          subtitle: `Welcome to ${name}`,
-          layout: 'cover',
-          backgroundImage: '/src/assets/images/dish_jollof_chicken_1792837966503.jpg',
-          items: []
-        },
-        {
-          id: `p-${Date.now()}-2`,
-          pageNumber: 2,
-          title: 'Chef Starters',
-          subtitle: 'Artisan appetizers',
-          layout: 'hero_three_items',
-          items: [
-            {
-              id: `it-${Date.now()}-1`,
-              name: 'House Signature Starter',
-              description: 'Freshly prepared with aromatic local spices and herb dressing.',
-              price: 3500,
-              badge: 'Chef Special',
-              prepTime: '10 min'
-            }
-          ]
-        }
-      ]
+      tables: [],
+      pages: []
     };
 
-    setRestaurants(prev => [...prev, newRestaurant]);
-    setActiveRestaurantId(newRestaurant.id);
-    showNotification(`New restaurant "${name}" created with ${preset.name} template!`);
+    setRestaurants(prev => [...prev, newRest]);
+    setActiveRestaurantId(newId);
   };
 
   return (
@@ -647,11 +584,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         orders,
         waiterCalls,
         notificationMsg,
+        isCustomerRoute,
+        restaurantNotFound,
+        requestedSlug,
+        ownerSession,
         setCurrentView,
         switchRestaurant,
-        setTableContext,
-        simulateNfcTap,
         showNotification,
+        setCurrentTable,
+        logoutOwner,
         updateRestaurantMeta,
         updateDesign,
         applyTemplate,
@@ -686,6 +627,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
 export const useApp = () => {
   const context = useContext(AppContext);
-  if (!context) throw new Error('useApp must be used within an AppProvider');
+  if (!context) {
+    throw new Error('useApp must be used within an AppProvider');
+  }
   return context;
 };
