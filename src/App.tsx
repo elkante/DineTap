@@ -6,6 +6,7 @@ import { QuickMenuView } from './components/QuickMenu/QuickMenuView';
 import { CustomerCartDrawer } from './components/CustomerCartDrawer';
 import { WaiterCallModal } from './components/WaiterCallModal';
 import { RestaurantDashboard } from './components/Dashboard/RestaurantDashboard';
+import { LandingPage } from './components/Landing/LandingPage';
 import { AuthPortal } from './components/Auth/AuthPortal';
 import { FoodItem } from './types';
 import { Sparkles, Plus, Minus, X, AlertCircle, Store, ArrowRight } from 'lucide-react';
@@ -62,10 +63,10 @@ const MainContent: React.FC = () => {
             <ArrowRight className="w-4 h-4" />
           </a>
           <a
-            href="/?r=demo&table=Table+5"
+            href="/"
             className="px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 font-bold rounded-xl text-xs border border-neutral-800 transition-colors"
           >
-            Explore Demo Restaurant
+            Back to Home
           </a>
         </div>
       </div>
@@ -89,8 +90,8 @@ const MainContent: React.FC = () => {
         </>
       );
     }
-    // Owner is not logged in: show the AuthPortal (Create restaurant / Login)
-    return <AuthPortal />;
+    // Owner is not logged in: show the high-converting SaaS Landing Page
+    return <LandingPage />;
   }
 
   // =========================================================================

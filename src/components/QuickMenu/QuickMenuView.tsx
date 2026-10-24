@@ -60,7 +60,11 @@ export const QuickMenuView: React.FC<{ onSelectItem: (item: FoodItem) => void }>
       {/* Header Banner */}
       <div className="bg-white rounded-2xl border border-neutral-200 p-5 shadow-sm mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="text-3xl p-2 bg-amber-50 rounded-xl">{activeRestaurant.logo}</div>
+          {activeRestaurant.logo && (activeRestaurant.logo.startsWith('data:') || activeRestaurant.logo.startsWith('http') || activeRestaurant.logo.startsWith('/')) ? (
+            <img src={activeRestaurant.logo} alt={activeRestaurant.name} className="w-12 h-12 rounded-xl object-cover border border-amber-200" />
+          ) : (
+            <div className="text-3xl p-2 bg-amber-50 rounded-xl">{activeRestaurant.logo}</div>
+          )}
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-extrabold text-neutral-900">{activeRestaurant.name}</h1>

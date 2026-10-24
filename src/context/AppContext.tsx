@@ -16,6 +16,11 @@ import { playKitchenChime } from '../utils/audio';
 import { 
   syncOrderToSupabase, 
   syncWaiterCallToSupabase, 
+  fetchRestaurantBySlug,
+  fetchOrdersFromSupabase,
+  fetchWaiterCallsFromSupabase,
+  updateOrderStatusInSupabase,
+  resolveWaiterCallInSupabase,
   getActiveSession, 
   setActiveSession as saveActiveSession, 
   OwnerSession,
@@ -148,18 +153,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsCustomerRoute(true);
       setRequestedSlug(slugParam);
 
-      // Find matching restaurant
-      const match = restaurants.find(r => 
+      // 1. Immediate match in local state if available
+      const localMatch = restaurants.find(r => 
         r.slug.toLowerCase() === slugParam.toLowerCase() || 
         r.id === slugParam
       );
 
-      if (match) {
-        setActiveRestaurantId(match.id);
+      if (localMatch) {
+        setActiveRestaurantId(localMatch.id);
         setRestaurantNotFound(false);
-      } else {
-        setRestaurantNotFound(true);
       }
+
+      // 2. Query Supabase so ANY phone or external device gets the real restaurant
+      fetchRestaurantBySlug(slugParam).then(remote => {
+        if (remote) {
+          setRestaurants(prev => {
+            const rest = prev.filter(r => r.id !== remote.id && r.slug !== remote.slug);
+            return [remote, ...rest];
+          });
+          setActiveRestaurantId(remote.id);
+          setRestaurantNotFound(false);
+        } else if (!localMatch) {
+          setRestaurantNotFound(true);
+        }
+      }).catch(err => {
+        console.warn('Error fetching restaurant by slug:', err);
+        if (!localMatch) setRestaurantNotFound(true);
+      });
 
       if (tableParam) {
         setCurrentTable(decodeURIComponent(tableParam));
@@ -184,7 +204,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
     }
-  }, [restaurants]);
+  }, []);
+
+  // Poll Supabase in background for real-time kitchen orders & waiter buzzer calls
+  useEffect(() => {
+    if (!activeRestaurantId) return;
+
+    let isMounted = true;
+    const pollSupabase = async () => {
+      try {
+        const [remoteOrders, remoteCalls] = await Promise.all([
+          fetchOrdersFromSupabase(activeRestaurantId),
+          fetchWaiterCallsFromSupabase(activeRestaurantId)
+        ]);
+
+        if (!isMounted) return;
+
+        if (remoteOrders && remoteOrders.length > 0) {
+          setOrders(prev => {
+            const prevIds = new Set(prev.map(o => o.id));
+            const hasNew = remoteOrders.some(o => !prevIds.has(o.id));
+            if (hasNew && !isCustomerRoute) {
+              playKitchenChime();
+            }
+            return remoteOrders;
+          });
+        }
+
+        if (remoteCalls && remoteCalls.length > 0) {
+          setWaiterCalls(prev => {
+            const prevIds = new Set(prev.map(c => c.id));
+            const hasNew = remoteCalls.some(c => !prevIds.has(c.id));
+            if (hasNew && !isCustomerRoute) {
+              playKitchenChime();
+            }
+            return remoteCalls;
+          });
+        }
+      } catch (e) {
+        // network hiccups tolerated
+      }
+    };
+
+    pollSupabase();
+    const interval = setInterval(pollSupabase, 3500);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [activeRestaurantId, isCustomerRoute]);
 
   // Persist restaurants
   useEffect(() => {
@@ -527,11 +595,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const resolveWaiterCall = (id: string) => {
     setWaiterCalls(prev => prev.filter(c => c.id !== id));
+    resolveWaiterCallInSupabase(id);
   };
 
   const updateOrderStatus = (orderId: string, status: Order['status']) => {
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
-    showNotification(`Order #${orderId} marked as ${status}`);
+    updateOrderStatusInSupabase(orderId, status);
+    showNotification(`Order marked as ${status}`);
   };
 
   const toggleTenantStatus = (tenantId: string) => {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { setActiveSession } from '../../utils/supabase';
+import { setActiveSession, fileToDataUrl, saveDishToSupabase } from '../../utils/supabase';
 import { generateQrDataUrl } from '../../utils/nfc';
 import { 
   ChefHat, 
@@ -20,7 +20,9 @@ import {
   Coins,
   CreditCard,
   Building2,
-  PhoneCall
+  PhoneCall,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 import { FoodItem } from '../../types';
 
@@ -51,6 +53,7 @@ export const RestaurantDashboard: React.FC = () => {
   const [newItemDesc, setNewItemDesc] = useState('');
   const [newItemBadge, setNewItemBadge] = useState<FoodItem['badge']>('');
   const [newItemPrepTime, setNewItemPrepTime] = useState('15 min');
+  const [newItemImage, setNewItemImage] = useState<string>('');
 
   // Add Table state
   const [newTableNumber, setNewTableNumber] = useState('');
@@ -95,6 +98,30 @@ export const RestaurantDashboard: React.FC = () => {
     window.location.href = window.location.pathname;
   };
 
+  const handleDishImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      setNewItemImage(dataUrl);
+      showNotification('Dish photo attached!');
+    } catch {
+      showNotification('Failed to read image file');
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      updateRestaurantMeta({ logo: dataUrl });
+      showNotification('Restaurant logo updated!');
+    } catch {
+      showNotification('Failed to read logo file');
+    }
+  };
+
   const handleCreateDish = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItemName.trim()) return;
@@ -103,16 +130,25 @@ export const RestaurantDashboard: React.FC = () => {
     const targetPage = activeRestaurant.pages.find(p => p.layout !== 'cover') || activeRestaurant.pages[0];
     if (!targetPage) return;
 
-    addFoodItem(targetPage.id, {
+    const dishPayload = {
       name: newItemName.trim(),
       description: newItemDesc.trim(),
       price: Number(newItemPrice) || 1000,
       badge: newItemBadge,
       prepTime: newItemPrepTime.trim() || '15 min',
-    });
+      imageUrl: newItemImage || undefined,
+    };
 
+    addFoodItem(targetPage.id, dishPayload);
+    saveDishToSupabase(activeRestaurant.id, {
+      id: `it-${Date.now()}`,
+      ...dishPayload,
+    }, targetPage.title);
+
+    showNotification(`Added "${dishPayload.name}" to menu!`);
     setNewItemName('');
     setNewItemDesc('');
+    setNewItemImage('');
     setIsAddItemOpen(false);
   };
 
@@ -285,18 +321,18 @@ export const RestaurantDashboard: React.FC = () => {
                 <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3">
                   <CheckCircle2 className="w-8 h-8" />
                 </div>
-                <h3 className="text-base font-bold text-neutral-900">All Table Orders Clear!</h3>
+                <h3 className="text-base font-bold text-neutral-900">Live Kitchen Tickets Ready</h3>
                 <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto">
-                  When a customer scans Table 5 and taps "Confirm Order", their ticket will immediately appear here.
+                  When diners scan any of your table QR stand cards, tickets appear here in real time with an audio alert.
                 </p>
                 <div className="mt-4">
                   <a
-                    href={`${origin}/?r=${activeRestaurant.slug}&table=Table+5`}
+                    href={`${origin}/?r=${activeRestaurant.slug}&table=Table+1`}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 text-white text-xs font-bold rounded-xl shadow-xs"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
                   >
-                    <span>Test Table 5 Order &rarr;</span>
+                    <span>Open Table 1 Menu &rarr;</span>
                   </a>
                 </div>
               </div>
@@ -616,6 +652,25 @@ export const RestaurantDashboard: React.FC = () => {
               <h2 className="text-sm font-extrabold text-neutral-900">Restaurant Profile & Settings</h2>
 
               <div>
+                <label className="block font-bold text-neutral-600 mb-1">Restaurant Logo</label>
+                <div className="flex items-center gap-3 p-3 bg-neutral-50 border border-neutral-200 rounded-xl mb-3">
+                  {activeRestaurant.logo && (activeRestaurant.logo.startsWith('data:') || activeRestaurant.logo.startsWith('http') || activeRestaurant.logo.startsWith('/')) ? (
+                    <img src={activeRestaurant.logo} alt={activeRestaurant.name} className="w-12 h-12 rounded-xl object-cover border border-neutral-300" />
+                  ) : (
+                    <div className="text-3xl p-1 bg-white border border-neutral-200 rounded-xl">{activeRestaurant.logo || '🍽️'}</div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Upload Logo File</span>
+                      <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                    </label>
+                    <div className="text-[10px] text-neutral-400 mt-1">PNG, JPG, or WEBP logo</div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
                 <label className="block font-bold text-neutral-600 mb-1">Restaurant Name</label>
                 <input
                   type="text"
@@ -690,6 +745,29 @@ export const RestaurantDashboard: React.FC = () => {
                   placeholder="e.g. Charcoal Suya Platter"
                   className="w-full px-3 py-2 border border-neutral-200 rounded-xl focus:outline-none focus:border-neutral-900"
                 />
+              </div>
+
+              <div>
+                <label className="block font-bold text-neutral-700 mb-1">Dish Photo</label>
+                {newItemImage ? (
+                  <div className="relative w-full h-28 rounded-xl overflow-hidden border border-neutral-200 mb-2">
+                    <img src={newItemImage} alt="Preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setNewItemImage('')}
+                      className="absolute top-2 right-2 p-1.5 bg-neutral-900/80 hover:bg-neutral-900 text-white rounded-lg shadow-sm"
+                      title="Remove image"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-neutral-200 hover:border-amber-500 rounded-xl cursor-pointer bg-neutral-50 transition-colors">
+                    <Upload className="w-4 h-4 text-neutral-500" />
+                    <span className="text-xs font-semibold text-neutral-700">Attach Photo from Device</span>
+                    <input type="file" accept="image/*" onChange={handleDishImageUpload} className="hidden" />
+                  </label>
+                )}
               </div>
 
               <div>

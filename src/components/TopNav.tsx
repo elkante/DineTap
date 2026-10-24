@@ -32,9 +32,13 @@ export const TopNav: React.FC<{
             onClick={() => setCurrentView('flipbook')}
             className="flex items-center gap-2 group text-left focus:outline-none min-w-0"
           >
-            <span className="text-xl sm:text-2xl shrink-0 p-1 bg-neutral-100 rounded-lg">
-              {activeRestaurant.logo}
-            </span>
+            {activeRestaurant.logo && (activeRestaurant.logo.startsWith('data:') || activeRestaurant.logo.startsWith('http') || activeRestaurant.logo.startsWith('/')) ? (
+              <img src={activeRestaurant.logo} alt={activeRestaurant.name} className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl object-cover shrink-0 border border-neutral-200" />
+            ) : (
+              <span className="text-xl sm:text-2xl shrink-0 p-1 bg-neutral-100 rounded-lg">
+                {activeRestaurant.logo || '🍽️'}
+              </span>
+            )}
             <div className="min-w-0">
               <span className="font-extrabold text-sm sm:text-base tracking-tight text-neutral-900 block truncate group-hover:text-amber-800 transition-colors">
                 {activeRestaurant.name}
