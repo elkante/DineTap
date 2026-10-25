@@ -321,7 +321,7 @@ export const RestaurantDashboard: React.FC = () => {
           ...dishPayload,
           isSoldOut: editingDish.isSoldOut,
           allergens: editingDish.allergens,
-        });
+        }, editingDish.id);
       } else {
         updateFoodItem(editingDish.pageId, editingDish.id, dishPayload);
       }
@@ -337,12 +337,13 @@ export const RestaurantDashboard: React.FC = () => {
       // Add new dish
       const newDishId = `it-${Date.now()}`;
       if (targetPageId) {
-        addFoodItem(targetPageId, dishPayload);
+        addFoodItem(targetPageId, dishPayload, newDishId);
+      } else {
+        saveDishToSupabase(activeRestaurant.id, {
+          id: newDishId,
+          ...dishPayload,
+        }, chosenCat);
       }
-      saveDishToSupabase(activeRestaurant.id, {
-        id: newDishId,
-        ...dishPayload,
-      }, chosenCat);
       showNotification(`Added "${dishPayload.name}" to ${chosenCat}!`);
     }
 

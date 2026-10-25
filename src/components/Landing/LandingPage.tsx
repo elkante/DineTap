@@ -168,11 +168,10 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
             <a href="#hero" className="text-amber-900 border-b-2 border-amber-900 pb-0.5">Home</a>
             <button onClick={() => onOpenPricing ? onOpenPricing() : (window.location.search = '?page=pricing')} className="hover:text-amber-900 transition-colors">Pricing</button>
             <a href="#features" className="hover:text-amber-900 transition-colors">Why TapMenu</a>
-            <button onClick={() => { setAuthModal('login'); setErrorMsg(null); }} className="hover:text-amber-900 transition-colors">Kitchen KDS</button>
           </div>
 
           {/* Right Action Buttons */}
-          <div className="flex items-center gap-1.5 sm:gap-3 text-xs">
+          <div className="flex items-center gap-2 sm:gap-3 text-xs">
             <PWAInstallButton variant="nav" />
             <button
               onClick={() => onOpenPricing ? onOpenPricing() : (window.location.search = '?page=pricing')}
@@ -182,23 +181,16 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
             </button>
             <button
               onClick={() => { setAuthModal('login'); setErrorMsg(null); }}
-              className="px-2.5 sm:px-3.5 py-1.5 text-stone-700 hover:text-stone-950 font-bold transition-colors"
+              className="px-3.5 sm:px-4 py-1.5 text-stone-800 hover:text-stone-950 font-bold transition-colors border border-stone-300 rounded-full bg-white/80 hover:bg-white shadow-xs"
             >
               Sign In
-            </button>
-            <button
-              onClick={() => { setAuthModal('signup'); setErrorMsg(null); }}
-              className="px-3.5 sm:px-5 py-2 sm:py-2.5 bg-[#0c2e22] hover:bg-[#124231] text-[#D4AF37] font-extrabold rounded-full transition-all shadow-md active:scale-95 border border-[#D4AF37]/40 text-xs flex items-center gap-1 whitespace-nowrap"
-            >
-              <span>Create Menu Free</span>
-              <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
       </nav>
 
       {/* Hero Section: Full-bleed background image with text directly overlaying it */}
-      <section id="hero" className="relative min-h-[580px] sm:min-h-[640px] lg:min-h-[680px] flex items-center justify-center text-center overflow-hidden bg-stone-900">
+      <section id="hero" className="relative min-h-[540px] sm:min-h-[600px] lg:min-h-[640px] flex items-center justify-center text-center overflow-hidden bg-stone-900">
         {/* Full-bleed background restaurant hero photography - bright, warm, and inviting */}
         <img
           src="https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?auto=format&fit=crop&w=2000&q=90"
@@ -217,25 +209,24 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
         <div className="absolute inset-0 bg-gradient-to-t from-stone-950/80 via-transparent to-stone-950/40 pointer-events-none" />
 
         {/* Hero Content directly ON TOP of the background image */}
-        <div className="relative z-10 max-w-5xl mx-auto px-4 py-16 sm:py-24 flex flex-col items-center">
+        <div className="relative z-10 max-w-5xl mx-auto px-4 py-14 sm:py-20 flex flex-col items-center">
           {/* Subtle Luxury Badge */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/50 backdrop-blur-md border border-[#D4AF37]/40 text-[#D4AF37] text-[10px] sm:text-xs font-bold mb-6 shadow-xl max-w-full truncate">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/50 backdrop-blur-md border border-[#D4AF37]/40 text-[#D4AF37] text-[10px] sm:text-xs font-bold mb-5 shadow-xl max-w-full truncate">
             <Sparkles className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
-            <span className="truncate">Digital Smart Cards &bull; Instant QR &bull; Direct Table Orders</span>
+            <span className="truncate">Smart NFC &bull; Table QR &bull; Direct Table Orders</span>
           </div>
 
-          {/* Main Headline with Highlighted Gradient Word/Phrase */}
-          <h1 className="font-serif text-3xl xs:text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight max-w-4xl mx-auto leading-[1.14] sm:leading-[1.12] text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]">
+          {/* Main Headline with Highlighted Gradient Word/Phrase - Shorter and Punchy */}
+          <h1 className="font-serif text-3xl xs:text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight max-w-3xl mx-auto leading-[1.12] sm:leading-[1.1] text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]">
             Turn Dining Tables into{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-[#D4AF37] to-amber-400 italic">
-              Luxury Digital Books
-            </span>{' '}
-            &amp; Direct Orders
+              Realistic 3D Menu Books
+            </span>
           </h1>
 
-          {/* Subtitle */}
-          <p className="text-xs sm:text-base md:text-lg text-stone-200/90 max-w-2xl mx-auto mt-5 sm:mt-6 leading-relaxed font-normal drop-shadow">
-            Zero app downloads for diners. Customers tap an NFC card or scan table QR code, browse a realistic leather-bound flipbook menu, and order straight to your kitchen.
+          {/* Subtitle - Shorter, Concise */}
+          <p className="text-xs sm:text-base md:text-lg text-stone-200/95 max-w-xl mx-auto mt-4 sm:mt-5 leading-relaxed font-normal drop-shadow">
+            Zero app downloads. Guests tap an NFC card or scan table QR to flip through an authentic leather menu and order directly to your kitchen.
           </p>
 
           {/* CTA Buttons side-by-side right on the image */}

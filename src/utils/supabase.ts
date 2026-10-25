@@ -29,9 +29,55 @@ export interface OwnerSession {
  */
 export function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
-    // Compress/resize if very large
+    // If not an image, read directly
+    if (!file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+      return;
+    }
+
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
+    reader.onload = (e) => {
+      const rawUrl = e.target?.result as string;
+      if (!rawUrl || file.type === 'image/svg+xml') {
+        return resolve(rawUrl);
+      }
+
+      // Resize/compress to max 900px dimension and ~82% JPEG quality
+      // This reduces 5-10MB phone uploads to 80-150KB for instant Supabase sync
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 900;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          return resolve(rawUrl);
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressed = canvas.toDataURL('image/jpeg', 0.82);
+        resolve(compressed);
+      };
+      img.onerror = () => resolve(rawUrl);
+      img.src = rawUrl;
+    };
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
@@ -127,15 +173,21 @@ function mapDbRowToRestaurant(rRow: any, itemRows: any[] = []): RestaurantTenant
       });
     });
   } else {
-    // Empty starter page ready for dishes (NO mock dishes)
-    pages.push({
-      id: `p-${rRow.id}-2`,
-      pageNumber: 2,
-      title: 'Menu',
-      subtitle: 'Dishes prepared fresh to order',
-      layout: 'chef_specials',
-      items: []
-    });
+    // If no items in Supabase yet, check local cache to see if there are locally created dishes
+    const localMatch = getStoredRestaurants().find(r => r.id === rRow.id || r.slug === rRow.slug);
+    if (localMatch && localMatch.pages && localMatch.pages.length > 1 && localMatch.pages.some(p => p.items && p.items.length > 0)) {
+      pages.push(...localMatch.pages.filter(p => p.layout !== 'cover'));
+    } else {
+      // Empty starter page ready for dishes (NO mock dishes)
+      pages.push({
+        id: `p-${rRow.id}-2`,
+        pageNumber: 2,
+        title: 'Menu',
+        subtitle: 'Dishes prepared fresh to order',
+        layout: 'chef_specials',
+        items: []
+      });
+    }
   }
 
   // Create initial 5 tables for QR / NFC
@@ -203,20 +255,20 @@ export async function fetchRestaurantBySlug(slug: string): Promise<RestaurantTen
       const { data: rRow, error: rErr } = await supabase
         .from('restaurants')
         .select('*')
-        .eq('slug', cleanSlug)
+        .or(`slug.eq.${cleanSlug},id.eq.${cleanSlug}`)
         .maybeSingle();
 
       if (rRow && !rErr) {
-        // Fetch menu items for this restaurant
+        // Fetch menu items for this restaurant by primary row id or slug
         const { data: itemRows } = await supabase
           .from('menu_items')
           .select('*')
-          .eq('restaurant_id', rRow.id)
-          .order('sort_order', { ascending: true });
+          .or(`restaurant_id.eq.${rRow.id},restaurant_id.eq.${rRow.slug}`)
+          .order('created_at', { ascending: true });
 
         const mapped = mapDbRowToRestaurant(rRow, itemRows || []);
         // Cache locally for offline resilience
-        const existing = getStoredRestaurants().filter(r => r.slug !== cleanSlug);
+        const existing = getStoredRestaurants().filter(r => r.slug !== cleanSlug && r.id !== rRow.id);
         saveStoredRestaurants([...existing, mapped]);
         return mapped;
       }
@@ -227,7 +279,7 @@ export async function fetchRestaurantBySlug(slug: string): Promise<RestaurantTen
 
   // 2. Fallback to local cache
   const stored = getStoredRestaurants();
-  const match = stored.find(r => r.slug.toLowerCase() === cleanSlug);
+  const match = stored.find(r => r.slug.toLowerCase() === cleanSlug || r.id === cleanSlug);
   return match || null;
 }
 
@@ -675,38 +727,141 @@ export async function resolveWaiterCallInSupabase(callId: string): Promise<void>
 }
 
 /**
- * Save a dish to Supabase menu_items table
+ * Resolve the real restaurant database row ID (UUID / rest-xxx) for foreign key validity
  */
-export async function saveDishToSupabase(restaurantId: string, item: FoodItem, category: string = 'Specialities'): Promise<void> {
-  if (!supabase) return;
+export async function resolveRestaurantDbId(idOrSlug: string): Promise<string> {
+  if (!idOrSlug) return '';
+  const clean = idOrSlug.trim();
+
+  // 1. Check local cache
+  const stored = getStoredRestaurants();
+  const match = stored.find(r => r.id === clean || r.slug.toLowerCase() === clean.toLowerCase());
+  if (match && match.id && match.id.startsWith('rest-')) {
+    return match.id;
+  }
+
+  // 2. Query Supabase
+  if (supabase) {
+    try {
+      const { data } = await supabase
+        .from('restaurants')
+        .select('id')
+        .or(`id.eq.${clean},slug.eq.${clean.toLowerCase()}`)
+        .maybeSingle();
+      if (data?.id) return data.id;
+    } catch (e) {
+      console.warn('Error resolving restaurant DB ID:', e);
+    }
+  }
+
+  return match?.id || clean;
+}
+
+/**
+ * Save a dish to Supabase menu_items table with foreign key resolution & local cache sync
+ */
+export async function saveDishToSupabase(
+  restaurantIdOrSlug: string,
+  item: FoodItem,
+  category: string = 'Specialities'
+): Promise<{ success: boolean; error?: string }> {
+  // Sync to local cache first so it's instantly visible
   try {
-    await supabase.from('menu_items').upsert({
+    const stored = getStoredRestaurants();
+    const updated = stored.map(r => {
+      if (r.id !== restaurantIdOrSlug && r.slug.toLowerCase() !== restaurantIdOrSlug.toLowerCase()) return r;
+      const cleanCat = category.trim() || 'Specialities';
+      let pageFound = false;
+      const newPages = r.pages.map(p => {
+        if (p.title.toLowerCase() === cleanCat.toLowerCase()) {
+          pageFound = true;
+          const itemExists = p.items.some(it => it.id === item.id);
+          const newItems = itemExists
+            ? p.items.map(it => it.id === item.id ? { ...it, ...item } : it)
+            : [...p.items, item];
+          return { ...p, items: newItems };
+        }
+        return p;
+      });
+      if (!pageFound) {
+        newPages.push({
+          id: `p-${Date.now()}`,
+          pageNumber: newPages.length + 1,
+          title: cleanCat,
+          subtitle: `${cleanCat} prepared fresh daily`,
+          layout: 'two_column_grid',
+          items: [item]
+        });
+      }
+      return { ...r, pages: newPages };
+    });
+    saveStoredRestaurants(updated);
+  } catch (err) {
+    console.warn('Local dish cache update error:', err);
+  }
+
+  if (!supabase) return { success: false, error: 'Supabase offline' };
+
+  try {
+    const resolvedRestId = await resolveRestaurantDbId(restaurantIdOrSlug);
+    if (!resolvedRestId) {
+      console.error('Cannot save dish: restaurant not found', restaurantIdOrSlug);
+      return { success: false, error: 'Restaurant ID not found' };
+    }
+
+    const { error } = await supabase.from('menu_items').upsert({
       id: item.id,
-      restaurant_id: restaurantId,
-      category,
+      restaurant_id: resolvedRestId,
+      category: category || 'Specialities',
       name: item.name,
-      description: item.description,
-      price: item.price,
+      description: item.description || '',
+      price: Number(item.price) || 0,
       badge: item.badge || '',
       image_url: item.imageUrl || '',
       prep_time: item.prepTime || '15 min',
       allergens: item.allergens || [],
       is_sold_out: Boolean(item.isSoldOut)
-    });
-  } catch (e) {
-    console.warn('Save dish to Supabase error:', e);
+    }, { onConflict: 'id' });
+
+    if (error) {
+      console.error('Supabase save dish error:', error);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (e: any) {
+    console.warn('Save dish to Supabase exception:', e);
+    return { success: false, error: e?.message || 'Error saving dish' };
   }
 }
 
 /**
- * Delete dish from Supabase
+ * Delete dish from Supabase & local storage
  */
-export async function deleteDishFromSupabase(itemId: string): Promise<void> {
-  if (!supabase) return;
+export async function deleteDishFromSupabase(itemId: string): Promise<boolean> {
+  // Sync to local cache
   try {
-    await supabase.from('menu_items').delete().eq('id', itemId);
+    const stored = getStoredRestaurants();
+    const updated = stored.map(r => ({
+      ...r,
+      pages: r.pages.map(p => ({
+        ...p,
+        items: p.items.filter(it => it.id !== itemId)
+      }))
+    }));
+    saveStoredRestaurants(updated);
+  } catch {}
+
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('menu_items').delete().eq('id', itemId);
+    if (error) {
+      console.error('Supabase delete dish error:', error);
+      return false;
+    }
+    return true;
   } catch (e) {
     console.warn('Delete dish from Supabase error:', e);
+    return false;
   }
 }
 

@@ -36,6 +36,8 @@ export const FlipbookViewer: React.FC = () => {
   const [itemNotes, setItemNotes] = useState('');
   const [isFlipping, setIsFlipping] = useState(false);
   const [flipDirection, setFlipDirection] = useState<'next' | 'prev'>('next');
+  const [fromPageIndex, setFromPageIndex] = useState<number | null>(null);
+  const [targetPageIndex, setTargetPageIndex] = useState<number | null>(null);
 
   // Touch swipe handling for mobile
   const touchStartX = useRef<number | null>(null);
@@ -79,6 +81,8 @@ export const FlipbookViewer: React.FC = () => {
   const triggerFlip = (direction: 'next' | 'prev', newIndex: number) => {
     if (newIndex < 0 || newIndex >= pages.length || isFlipping) return;
     
+    setFromPageIndex(currentPageIndex);
+    setTargetPageIndex(newIndex);
     setIsFlipping(true);
     setFlipDirection(direction);
 
@@ -89,7 +93,9 @@ export const FlipbookViewer: React.FC = () => {
     setTimeout(() => {
       setCurrentPageIndex(newIndex);
       setIsFlipping(false);
-    }, 320);
+      setFromPageIndex(null);
+      setTargetPageIndex(null);
+    }, 520);
   };
 
   const goToNextPage = () => {
@@ -218,83 +224,134 @@ export const FlipbookViewer: React.FC = () => {
             <div 
               className="w-full h-[490px] xs:h-[550px] sm:h-[620px] relative rounded-2xl overflow-hidden bg-[#FAF7F2]"
               style={{
-                boxShadow: '2px 2px 0 #ede8db, 4px 4px 0 #e0d9c8, 6px 6px 0 #d5ccb8, 12px 14px 28px rgba(0,0,0,0.55)',
-                perspective: '1600px',
+                boxShadow: `${Math.min(4, Math.max(1, Math.ceil((pages.length - 1 - currentPageIndex) / 2))) >= 1 ? '2px 2px 0 #ede8db, ' : ''}${Math.min(4, Math.max(1, Math.ceil((pages.length - 1 - currentPageIndex) / 2))) >= 2 ? '4px 4px 0 #e0d9c8, ' : ''}${Math.min(4, Math.max(1, Math.ceil((pages.length - 1 - currentPageIndex) / 2))) >= 3 ? '6px 6px 0 #d5ccb8, ' : ''}${Math.min(4, Math.max(1, Math.ceil((pages.length - 1 - currentPageIndex) / 2))) >= 4 ? '8px 8px 0 #c8bfa7, ' : ''}12px 14px 28px rgba(0,0,0,0.55)`,
+                perspective: '2200px',
                 transformStyle: 'preserve-3d'
               }}
             >
               {/* Spine Gutter Shadow overlay down the left side */}
               <div 
-                className="absolute top-0 bottom-0 left-0 w-8 z-20 pointer-events-none"
+                className="absolute top-0 bottom-0 left-0 w-8 z-30 pointer-events-none"
                 style={{
-                  background: 'linear-gradient(to right, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.05) 60%, transparent 100%)'
+                  background: 'linear-gradient(to right, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.06) 50%, transparent 100%)'
                 }}
               />
 
-              {/* 3D Turning Page Leaf Container */}
-              <div 
-                className={`w-full h-full transition-transform duration-300 ease-out origin-left ${
-                  isFlipping
-                    ? (flipDirection === 'next' ? '-rotate-y-12 scale-[0.985] opacity-90' : 'rotate-y-12 scale-[0.985] opacity-90')
-                    : 'rotate-y-0 scale-100 opacity-100'
-                }`}
-                style={{
-                  transformOrigin: 'left center'
-                }}
-              >
-                <FlipPageRenderer
-                  page={currentPage}
-                  design={design}
-                  restaurantName={activeRestaurant.name}
-                  restaurantLogo={activeRestaurant.logo}
-                  restaurantTagline={activeRestaurant.tagline}
-                  restaurantHours={activeRestaurant.openingHours}
-                  restaurantAddress={activeRestaurant.address}
-                  isCover={currentPageIndex === 0 || currentPage.layout === 'cover'}
-                  onSelectItem={(it) => {
-                    if (!it.isSoldOut) setSelectedItem(it);
-                  }}
-                  pageNumberDisplay={currentPageIndex + 1}
-                />
-              </div>
+              {/* Spine stitching line detail */}
+              <div className="absolute top-0 bottom-0 left-2.5 w-[1px] bg-amber-400/20 z-30 pointer-events-none" />
 
-              {/* Dynamic Page Turn Lighting Sheen */}
-              {isFlipping && (
-                <div
-                  className={`absolute inset-0 pointer-events-none transition-opacity duration-300 z-20 ${
-                    flipDirection === 'next'
-                      ? 'bg-gradient-to-r from-transparent via-black/10 to-black/35'
-                      : 'bg-gradient-to-l from-transparent via-black/10 to-black/35'
-                  }`}
-                />
-              )}
-
-              {/* Dog-ear corner fold in bottom right */}
-              {currentPageIndex < pages.length - 1 && !isFlipping && (
-                <div 
-                  onClick={goToNextPage}
-                  className="absolute bottom-0 right-0 w-12 h-12 z-25 cursor-pointer group"
-                  title="Turn to next page"
-                >
-                  <div 
-                    className="absolute bottom-0 right-0 w-0 h-0 border-solid border-t-[28px] border-r-[28px] border-t-amber-400/35 border-r-transparent group-hover:border-t-amber-400/70 transition-all drop-shadow"
-                    style={{ transform: 'rotate(180deg)' }}
+              {!isFlipping ? (
+                /* Resting State Page Leaf */
+                <div className="w-full h-full relative">
+                  <FlipPageRenderer
+                    page={currentPage}
+                    design={design}
+                    restaurantName={activeRestaurant.name}
+                    restaurantLogo={activeRestaurant.logo}
+                    restaurantTagline={activeRestaurant.tagline}
+                    restaurantHours={activeRestaurant.openingHours}
+                    restaurantAddress={activeRestaurant.address}
+                    isCover={currentPageIndex === 0 || currentPage.layout === 'cover'}
+                    onSelectItem={(it) => {
+                      if (!it.isSoldOut) setSelectedItem(it);
+                    }}
+                    pageNumberDisplay={currentPageIndex + 1}
                   />
-                  <div className="absolute bottom-1 right-1 text-[8px] font-bold text-amber-900/60 pointer-events-none">
-                    ▶
+                </div>
+              ) : (
+                /* Active 3D Flipping Animation: Base Layer + Turning Leaf */
+                <div className="w-full h-full relative" style={{ perspective: '2200px', transformStyle: 'preserve-3d' }}>
+                  {/* Base Underneath Layer (Revealed page or background) */}
+                  <div className="absolute inset-0 w-full h-full">
+                    <FlipPageRenderer
+                      page={flipDirection === 'next' ? (pages[targetPageIndex ?? 0] || currentPage) : (pages[fromPageIndex ?? 0] || currentPage)}
+                      design={design}
+                      restaurantName={activeRestaurant.name}
+                      restaurantLogo={activeRestaurant.logo}
+                      restaurantTagline={activeRestaurant.tagline}
+                      restaurantHours={activeRestaurant.openingHours}
+                      restaurantAddress={activeRestaurant.address}
+                      isCover={(flipDirection === 'next' ? targetPageIndex : fromPageIndex) === 0 || (pages[flipDirection === 'next' ? (targetPageIndex ?? 0) : (fromPageIndex ?? 0)]?.layout === 'cover')}
+                      pageNumberDisplay={(flipDirection === 'next' ? (targetPageIndex ?? 0) : (fromPageIndex ?? 0)) + 1}
+                    />
+                    {/* Shadow cast on the revealed page while turning leaf is overhead */}
+                    <div className="absolute inset-0 bg-black animate-book-cast-shadow pointer-events-none z-10" />
+                  </div>
+
+                  {/* Top Turning Sheet (Physically turning in 3D perspective around the left spine) */}
+                  <div 
+                    className={`absolute inset-0 w-full h-full z-20 ${
+                      flipDirection === 'next' ? 'animate-book-flip-next' : 'animate-book-flip-prev'
+                    }`}
+                  >
+                    <FlipPageRenderer
+                      page={flipDirection === 'next' ? (pages[fromPageIndex ?? 0] || currentPage) : (pages[targetPageIndex ?? 0] || currentPage)}
+                      design={design}
+                      restaurantName={activeRestaurant.name}
+                      restaurantLogo={activeRestaurant.logo}
+                      restaurantTagline={activeRestaurant.tagline}
+                      restaurantHours={activeRestaurant.openingHours}
+                      restaurantAddress={activeRestaurant.address}
+                      isCover={(flipDirection === 'next' ? fromPageIndex : targetPageIndex) === 0 || (pages[flipDirection === 'next' ? (fromPageIndex ?? 0) : (targetPageIndex ?? 0)]?.layout === 'cover')}
+                      pageNumberDisplay={(flipDirection === 'next' ? (fromPageIndex ?? 0) : (targetPageIndex ?? 0)) + 1}
+                    />
+                    {/* Dynamic cylindrical reflection and crease highlight across turning paper */}
+                    <div 
+                      className={`absolute inset-0 animate-book-curl-sheen pointer-events-none ${
+                        flipDirection === 'next' 
+                          ? 'bg-gradient-to-r from-transparent via-white/30 to-black/40' 
+                          : 'bg-gradient-to-l from-transparent via-white/30 to-black/40'
+                      }`} 
+                    />
                   </div>
                 </div>
+              )}
+
+              {/* Dog-ear corner fold in bottom right (Next Page Peel) */}
+              {currentPageIndex < pages.length - 1 && !isFlipping && (
+                <button 
+                  onClick={goToNextPage}
+                  className="absolute bottom-0 right-0 w-14 h-14 z-30 cursor-pointer group flex items-end justify-end focus:outline-none"
+                  title="Turn to next page"
+                  aria-label="Next page"
+                >
+                  <div 
+                    className="w-0 h-0 border-solid border-t-[32px] border-r-[32px] border-t-amber-400/40 border-r-transparent group-hover:border-t-amber-400/80 group-hover:scale-110 transition-all drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)] origin-bottom-right"
+                    style={{ transform: 'rotate(180deg)' }}
+                  />
+                  <div className="absolute bottom-1.5 right-1.5 text-[9px] font-black text-amber-950/70 group-hover:text-amber-950 transition-colors pointer-events-none">
+                    ▶
+                  </div>
+                </button>
+              )}
+
+              {/* Dog-ear corner fold in bottom left (Previous Page Peel) */}
+              {currentPageIndex > 0 && !isFlipping && (
+                <button 
+                  onClick={goToPrevPage}
+                  className="absolute bottom-0 left-0 w-14 h-14 z-30 cursor-pointer group flex items-end justify-start focus:outline-none"
+                  title="Turn to previous page"
+                  aria-label="Previous page"
+                >
+                  <div 
+                    className="w-0 h-0 border-solid border-t-[32px] border-l-[32px] border-t-amber-400/40 border-l-transparent group-hover:border-t-amber-400/80 group-hover:scale-110 transition-all drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)] origin-bottom-left"
+                    style={{ transform: 'rotate(-90deg)' }}
+                  />
+                  <div className="absolute bottom-1.5 left-1.5 text-[9px] font-black text-amber-950/70 group-hover:text-amber-950 transition-colors pointer-events-none">
+                    ◀
+                  </div>
+                </button>
               )}
 
               {/* Mobile Tap Zones */}
               <div 
                 onClick={goToPrevPage}
-                className="absolute top-0 bottom-0 left-0 w-16 z-20 cursor-pointer"
+                className="absolute top-0 bottom-0 left-0 w-16 z-25 cursor-pointer"
                 title="Tap left edge to go back"
               />
               <div 
                 onClick={goToNextPage}
-                className="absolute top-0 bottom-0 right-0 w-16 z-20 cursor-pointer"
+                className="absolute top-0 bottom-0 right-0 w-16 z-25 cursor-pointer"
                 title="Tap right edge to go forward"
               />
             </div>
