@@ -7,7 +7,11 @@ import {
   Store,
   KeyRound,
   Mail,
-  Smartphone
+  Smartphone,
+  Layers,
+  ChevronDown,
+  ChevronUp,
+  Palette
 } from 'lucide-react';
 import { 
   registerRestaurant, 
@@ -18,11 +22,20 @@ import {
 } from '../../utils/supabase';
 import { useApp } from '../../context/AppContext';
 import { PWAInstallButton } from '../PWAInstallButton';
+import { ShaderGradientCanvas } from '../3D/ShaderGradientCanvas';
+import { LiquidLogo3D } from '../3D/LiquidLogo3D';
+import { ScrollWorld } from '../3D/ScrollWorld';
+import { LiquidGlassCard } from '../3D/LiquidGlassCard';
 
 export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPricing }) => {
   const { showNotification } = useApp();
   const [authModal, setAuthModal] = useState<'signup' | 'login' | null>(null);
   const [loading, setLoading] = useState(false);
+  const [shaderPalette, setShaderPalette] = useState<'emeraldGold' | 'midnightLuxury' | 'sunsetAmber'>('emeraldGold');
+  const [enableShader, setEnableShader] = useState(true);
+  const [enableScrollWorld, setEnableScrollWorld] = useState(true);
+  const [hudCollapsed, setHudCollapsed] = useState(false);
+  const [showLogoModal, setShowLogoModal] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [contactConfig, setContactConfig] = useState<PlatformContactConfig>(() => getStoredPlatformContact());
 
@@ -143,23 +156,26 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-stone-900 font-sans selection:bg-amber-200 selection:text-amber-950 overflow-x-hidden">
+    <div className="relative min-h-screen bg-[#FAF7F2] text-stone-900 font-sans selection:bg-amber-200 selection:text-amber-950 overflow-x-hidden">
+      {/* 3D Scroll World Parallax Layer (Ambient luxury embers & depth rings across the page) */}
+      {enableScrollWorld && <ScrollWorld />}
+
       {/* Top Navbar: Modern, Ultra-clean & Mobile-first */}
       <nav className="border-b border-stone-200/80 sticky top-0 z-40 bg-white/95 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-3.5 sm:px-6 h-14 sm:h-18 flex items-center justify-between gap-2 sm:gap-4">
-          {/* Logo with secret 6-tap easter egg to /sys-hq */}
+          {/* Logo with secret 6-tap easter egg to /sys-hq and 3D preview on hover */}
           <button 
             onClick={handleLogoTap}
             type="button"
-            className="flex items-center gap-2 sm:gap-2.5 text-left focus:outline-none select-none active:scale-95 transition-transform"
-            title="TapMenu"
+            className="flex items-center gap-2 sm:gap-2.5 text-left focus:outline-none select-none active:scale-95 transition-transform group"
+            title="TapMenu - Tap 6 times for Super Admin"
           >
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-[#0c2e22] text-[#D4AF37] flex items-center justify-center font-serif font-black text-base sm:text-xl shadow-md border border-[#D4AF37]/40 shrink-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-[#0c2e22] text-[#D4AF37] flex items-center justify-center font-serif font-black text-base sm:text-xl shadow-md border border-[#D4AF37]/40 shrink-0 group-hover:scale-105 transition-transform">
               T
             </div>
             <div className="min-w-0">
               <span className="font-serif font-extrabold text-base sm:text-xl tracking-tight text-stone-900 block leading-tight">TapMenu</span>
-              <span className="text-[9px] sm:text-[10px] block text-amber-800 font-mono uppercase tracking-wider font-bold truncate">Luxury Menus</span>
+              <span className="text-[9px] sm:text-[10px] block text-amber-800 font-mono uppercase tracking-wider font-bold truncate">3D Menus &amp; Orders</span>
             </div>
           </button>
 
@@ -189,34 +205,52 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
         </div>
       </nav>
 
-      {/* Hero Section: Full-bleed background image with text directly overlaying it */}
-      <section id="hero" className="relative min-h-[540px] sm:min-h-[600px] lg:min-h-[640px] flex items-center justify-center text-center overflow-hidden bg-stone-900">
-        {/* Full-bleed background restaurant hero photography - bright, warm, and inviting */}
+      {/* Hero Section: Full-bleed background with interactive Shader Gradient Canvas and 3D Liquid Logo */}
+      <section id="hero" className="relative min-h-[580px] sm:min-h-[640px] lg:min-h-[680px] flex items-center justify-center text-center overflow-hidden bg-stone-900">
+        {/* Full-bleed background restaurant hero photography */}
         <img
           src="https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?auto=format&fit=crop&w=2000&q=90"
           alt="Warm Luxury Restaurant Dining Tables"
           className="absolute inset-0 w-full h-full object-cover object-center transform scale-105 filter brightness-105 contrast-105"
         />
 
-        {/* Balanced, Light Scrim: keeps the bright restaurant scene clearly visible while maintaining high text readability */}
-        <div className="absolute inset-0 bg-stone-950/40 sm:bg-stone-950/35" />
+        {/* Dynamic Liquid Shader Gradient (Procedural GLSL Fluid Waves) */}
+        {enableShader && (
+          <ShaderGradientCanvas
+            palette={shaderPalette}
+            speed={0.75}
+            interactive={true}
+            className="absolute inset-0 opacity-45 mix-blend-screen pointer-events-none z-1"
+          />
+        )}
+
+        {/* Balanced Light Scrim & Atmospheric Vignette */}
+        <div className="absolute inset-0 bg-stone-950/40 sm:bg-stone-950/35 z-2" />
         <div 
-          className="absolute inset-0 pointer-events-none"
+          className="absolute inset-0 pointer-events-none z-2"
           style={{
             background: 'radial-gradient(circle at center, rgba(12, 46, 34, 0.25) 0%, rgba(10, 14, 12, 0.65) 100%)'
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-stone-950/80 via-transparent to-stone-950/40 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-stone-950/80 via-transparent to-stone-950/40 pointer-events-none z-2" />
 
-        {/* Hero Content directly ON TOP of the background image */}
-        <div className="relative z-10 max-w-5xl mx-auto px-4 py-14 sm:py-20 flex flex-col items-center">
-          {/* Subtle Luxury Badge */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/50 backdrop-blur-md border border-[#D4AF37]/40 text-[#D4AF37] text-[10px] sm:text-xs font-bold mb-5 shadow-xl max-w-full truncate">
-            <Sparkles className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
-            <span className="truncate">Smart NFC &bull; Table QR &bull; Direct Table Orders</span>
+        {/* Hero Content directly ON TOP of the background image & shader */}
+        <div className="relative z-10 max-w-5xl mx-auto px-4 py-12 sm:py-16 flex flex-col items-center">
+          {/* 3D Liquid Logo Medallion (Interactive PBR Gold & Liquid Glass Torus) */}
+          <div className="mb-4 flex flex-col items-center">
+            <LiquidLogo3D size={110} interactive={true} className="drop-shadow-[0_12px_24px_rgba(0,0,0,0.6)]" />
+            <span className="text-[10px] font-mono font-bold text-amber-300/90 tracking-widest uppercase mt-1">
+              Interactive 3D Liquid Emblem &bull; Drag to Rotate
+            </span>
           </div>
 
-          {/* Main Headline with Highlighted Gradient Word/Phrase - Shorter and Punchy */}
+          {/* Subtle Luxury Badge */}
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-[#D4AF37]/50 text-[#D4AF37] text-[10px] sm:text-xs font-bold mb-4 shadow-xl max-w-full truncate">
+            <Sparkles className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
+            <span className="truncate">Smart NFC &bull; Table QR &bull; Live PWA Kitchen Alerts</span>
+          </div>
+
+          {/* Main Headline with Highlighted Gradient Word/Phrase */}
           <h1 className="font-serif text-3xl xs:text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight max-w-3xl mx-auto leading-[1.12] sm:leading-[1.1] text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]">
             Turn Dining Tables into{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-[#D4AF37] to-amber-400 italic">
@@ -224,13 +258,13 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
             </span>
           </h1>
 
-          {/* Subtitle - Shorter, Concise */}
+          {/* Subtitle */}
           <p className="text-xs sm:text-base md:text-lg text-stone-200/95 max-w-xl mx-auto mt-4 sm:mt-5 leading-relaxed font-normal drop-shadow">
             Zero app downloads. Guests tap an NFC card or scan table QR to flip through an authentic leather menu and order directly to your kitchen.
           </p>
 
           {/* CTA Buttons side-by-side right on the image */}
-          <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row items-center justify-center gap-3.5 sm:gap-4 max-w-xl mx-auto w-full">
+          <div className="mt-7 sm:mt-9 flex flex-col sm:flex-row items-center justify-center gap-3.5 sm:gap-4 max-w-xl mx-auto w-full">
             <button
               onClick={() => { setAuthModal('signup'); setErrorMsg(null); }}
               className="w-full sm:w-auto px-7 py-3.5 sm:py-4 bg-[#D4AF37] hover:bg-[#c59f2e] text-stone-950 font-black rounded-full text-xs sm:text-sm transition-all shadow-xl shadow-black/50 flex items-center justify-center gap-2 active:scale-95 border border-amber-200"
@@ -250,28 +284,28 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
           </div>
 
           {/* Value Prop Badges */}
-          <div className="mt-10 sm:mt-12 flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 text-[11px] sm:text-xs text-stone-300 font-medium">
-            <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/15 shadow-sm">
+          <div className="mt-8 sm:mt-10 flex flex-wrap items-center justify-center gap-2.5 sm:gap-4 text-[11px] sm:text-xs text-stone-300 font-medium">
+            <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/15 shadow-sm">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               <span>100% Direct Table Payments (POS / Cash)</span>
             </div>
-            <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/15 shadow-sm">
+            <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/15 shadow-sm">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span>Custom Slug & Signature Folio Color</span>
+              <span>Custom Slug &amp; Signature Folio Color</span>
             </div>
-            <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/15 shadow-sm">
+            <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/15 shadow-sm">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               <span>Zero 3rd-Party Payment Withholding</span>
             </div>
           </div>
         </div>
 
-        {/* Angled Accent Ribbon at Bottom Edge (Like the reference screenshot's vibrant accent band) */}
+        {/* Angled Accent Ribbon at Bottom Edge */}
         <div className="absolute bottom-0 left-0 right-0 h-2 sm:h-2.5 bg-gradient-to-r from-[#0c2e22] via-[#D4AF37] to-amber-600 shadow-md z-10" />
       </section>
 
-      {/* 3 Pillars Section */}
-      <section className="max-w-6xl mx-auto px-4 py-12 sm:py-16 border-t border-stone-200">
+      {/* 3 Pillars Section with Liquid Glass Cards */}
+      <section id="features" className="relative z-10 max-w-6xl mx-auto px-4 py-12 sm:py-16 border-t border-stone-200">
         <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-12">
           <h2 className="font-serif text-2xl sm:text-4xl font-bold text-stone-900">
             Why Top Restaurants Choose TapMenu
@@ -282,37 +316,118 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
-          <div className="p-6 bg-white rounded-3xl border border-stone-200 shadow-sm">
-            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-800 flex items-center justify-center font-bold mb-4">
+          <LiquidGlassCard className="p-6 bg-white/90 border-stone-200/80">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-800 flex items-center justify-center font-bold mb-4 shadow-xs">
               📖
             </div>
             <h3 className="font-serif text-lg font-bold text-stone-900 mb-1">Authentic Menu Book</h3>
             <p className="text-xs text-stone-600 leading-relaxed">
               Not another clinical PDF or generic web form. TapMenu provides a realistic luxury leather folio with 3D turning pages, debossed foil, and category tabs.
             </p>
-          </div>
+          </LiquidGlassCard>
 
-          <div className="p-6 bg-white rounded-3xl border border-stone-200 shadow-sm">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-800 flex items-center justify-center font-bold mb-4">
+          <LiquidGlassCard className="p-6 bg-white/90 border-stone-200/80">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-800 flex items-center justify-center font-bold mb-4 shadow-xs">
               📱
             </div>
             <h3 className="font-serif text-lg font-bold text-stone-900 mb-1">Tap Digital Card or Scan QR</h3>
             <p className="text-xs text-stone-600 leading-relaxed">
               Encode durable digital smart table pucks or print scannable QR stand cards. Orders always carry the specific table number straight to the kitchen.
             </p>
-          </div>
+          </LiquidGlassCard>
 
-          <div className="p-6 bg-white rounded-3xl border border-stone-200 shadow-sm">
-            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-900 flex items-center justify-center font-bold mb-4">
+          <LiquidGlassCard className="p-6 bg-white/90 border-stone-200/80">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-900 flex items-center justify-center font-bold mb-4 shadow-xs">
               💳
             </div>
             <h3 className="font-serif text-lg font-bold text-stone-900 mb-1">100% Direct Table Payments</h3>
             <p className="text-xs text-stone-600 leading-relaxed">
               No online payment gateways withholding your funds for days. Diners pay your staff directly via Card POS terminal, Cash, or Instant Bank Transfer.
             </p>
-          </div>
+          </LiquidGlassCard>
         </div>
       </section>
+
+      {/* Unified Bottom 3D Visual Experience Dock (Three.js Skill Directive) */}
+      <aside 
+        aria-label="3D Visual Controls"
+        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 max-w-[min(940px,94vw)] transition-transform duration-300"
+        style={{
+          transform: hudCollapsed ? 'translate(-50%, calc(100% - 24px))' : 'translate(-50%, 0)',
+        }}
+      >
+        <div className="flex flex-col items-center">
+          {/* Collapse / Expand Toggle Button */}
+          <button
+            type="button"
+            onClick={() => setHudCollapsed(!hudCollapsed)}
+            className="px-3 py-1 bg-stone-950/80 hover:bg-stone-900 text-stone-300 rounded-t-xl text-[10px] font-bold border-t border-x border-amber-500/30 flex items-center gap-1 shadow-md transition-colors"
+          >
+            {hudCollapsed ? <ChevronUp className="w-3 h-3 text-amber-400" /> : <ChevronDown className="w-3 h-3 text-amber-400" />}
+            <span>{hudCollapsed ? 'Show 3D Controls' : 'Hide 3D Controls'}</span>
+          </button>
+
+          {/* Control Bar */}
+          <div className="flex items-center gap-2 sm:gap-4 px-3.5 py-2 rounded-2xl bg-stone-950/90 text-stone-200 border border-amber-500/30 shadow-2xl backdrop-blur-xl text-xs">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-400 shrink-0">
+              <Layers className="w-3.5 h-3.5" />
+              <span>3D Engine:</span>
+            </div>
+
+            {/* Toggle Shader */}
+            <button
+              onClick={() => setEnableShader(!enableShader)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                enableShader ? 'bg-emerald-900/60 text-emerald-300 border border-emerald-500/40' : 'bg-stone-800 text-stone-400'
+              }`}
+            >
+              Liquid Shader: {enableShader ? 'ON' : 'OFF'}
+            </button>
+
+            {/* Shader Palette selector */}
+            {enableShader && (
+              <div className="hidden sm:flex items-center gap-1 text-[11px]">
+                <Palette className="w-3 h-3 text-stone-400" />
+                <button
+                  onClick={() => setShaderPalette('emeraldGold')}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    shaderPalette === 'emeraldGold' ? 'bg-[#D4AF37] text-stone-950' : 'text-stone-400 hover:text-white'
+                  }`}
+                >
+                  Emerald Gold
+                </button>
+                <button
+                  onClick={() => setShaderPalette('midnightLuxury')}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    shaderPalette === 'midnightLuxury' ? 'bg-[#D4AF37] text-stone-950' : 'text-stone-400 hover:text-white'
+                  }`}
+                >
+                  Midnight Noir
+                </button>
+                <button
+                  onClick={() => setShaderPalette('sunsetAmber')}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    shaderPalette === 'sunsetAmber' ? 'bg-[#D4AF37] text-stone-950' : 'text-stone-400 hover:text-white'
+                  }`}
+                >
+                  Sunset Amber
+                </button>
+              </div>
+            )}
+
+            {/* Toggle Scroll World */}
+            <button
+              onClick={() => setEnableScrollWorld(!enableScrollWorld)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                enableScrollWorld ? 'bg-amber-900/60 text-amber-300 border border-amber-500/40' : 'bg-stone-800 text-stone-400'
+              }`}
+            >
+              Scroll World: {enableScrollWorld ? 'ON' : 'OFF'}
+            </button>
+          </div>
+        </div>
+      </aside>
+
 
       {/* Footer */}
       <footer className="border-t border-stone-200 py-10 sm:py-12 bg-white text-xs text-stone-500">

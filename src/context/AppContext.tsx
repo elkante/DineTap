@@ -14,6 +14,7 @@ import {
 } from '../types';
 import { INITIAL_RESTAURANTS, TEMPLATE_PRESETS, createDefaultRestaurantTenant } from '../data/initialData';
 import { playKitchenChime } from '../utils/audio';
+import { notifyKitchenNewTicket, setAppBadgeCount } from '../utils/pwaNotifications';
 import { 
   syncOrderToSupabase, 
   syncWaiterCallToSupabase, 
@@ -340,6 +341,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     let isMounted = true;
 
+    // Helper to dispatch loud kitchen chime, OS App Badge count (e.g. 2 for 2 orders), and push notifications
+    const triggerKitchenAlert = (ticket: {
+      title: string;
+      body: string;
+      type: 'order' | 'waiter';
+      tableNumber?: string;
+    }) => {
+      if (isCustomerRoute) return;
+      const currentPending = orders.filter(o => o.status === 'pending' || o.status === 'preparing').length;
+      const currentCalls = waiterCalls.length;
+      const count = currentPending + currentCalls + 1;
+      notifyKitchenNewTicket({
+        title: ticket.title,
+        body: ticket.body,
+        badgeCount: count,
+        ticketType: ticket.type,
+        tableNumber: ticket.tableNumber,
+      });
+    };
+
     // 1. Cross-tab BroadcastChannel listener for instant same-browser updates
     let broadcast: BroadcastChannel | null = null;
     try {
@@ -351,7 +372,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (type === 'NEW_ORDER' && order) {
             setOrders(prev => {
               if (prev.some(o => o.id === order.id)) return prev;
-              if (!isCustomerRoute) playKitchenChime();
+              triggerKitchenAlert({
+                title: `🍽️ New Order (Table ${order.tableNumber})`,
+                body: order.items.map((i: any) => `${i.quantity}x ${i.name}`).join(', '),
+                type: 'order',
+                tableNumber: order.tableNumber,
+              });
               return [order, ...prev];
             });
           } else if (type === 'ORDER_STATUS_UPDATE' && orderId) {
@@ -359,7 +385,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           } else if (type === 'NEW_WAITER_CALL' && call) {
             setWaiterCalls(prev => {
               if (prev.some(c => c.id === call.id)) return prev;
-              if (!isCustomerRoute) playKitchenChime();
+              triggerKitchenAlert({
+                title: `🛎️ Table ${call.tableNumber} Calling Waiter!`,
+                body: `Table ${call.tableNumber} requested assistance (${call.reason || 'Service'}).`,
+                type: 'waiter',
+                tableNumber: call.tableNumber,
+              });
               return [call, ...prev];
             });
           } else if (type === 'WAITER_CALL_RESOLVED' && event.data.callId) {
@@ -425,7 +456,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
                 setOrders(prev => {
                   if (prev.some(o => o.id === mapped.id)) return prev;
-                  if (!isCustomerRoute) playKitchenChime();
+                  triggerKitchenAlert({
+                    title: `🍽️ New Order (Table ${mapped.tableNumber})`,
+                    body: mapped.items.map((i: any) => `${i.quantity}x ${i.name}`).join(', '),
+                    type: 'order',
+                    tableNumber: mapped.tableNumber,
+                  });
                   return [mapped, ...prev];
                 });
               } else if (payload.eventType === 'UPDATE' && payload.new) {
@@ -457,7 +493,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
                 setWaiterCalls(prev => {
                   if (prev.some(c => c.id === mapped.id)) return prev;
-                  if (!isCustomerRoute) playKitchenChime();
+                  triggerKitchenAlert({
+                    title: `🛎️ Table ${mapped.tableNumber} Calling Waiter!`,
+                    body: `Table ${mapped.tableNumber} requested assistance (${mapped.reason || 'Service'}).`,
+                    type: 'waiter',
+                    tableNumber: mapped.tableNumber,
+                  });
                   return [mapped, ...prev];
                 });
               } else if (payload.eventType === 'UPDATE' && payload.new) {
@@ -488,13 +529,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (Array.isArray(remoteOrders)) {
           setOrders(prev => {
             const prevMap = new Map(prev.map(o => [o.id, o]));
-            let hasNew = false;
-            remoteOrders.forEach(ro => {
-              if (!prevMap.has(ro.id)) hasNew = true;
-            });
+            const newOrders = remoteOrders.filter(ro => !prevMap.has(ro.id));
 
-            if (hasNew && !isCustomerRoute) {
-              playKitchenChime();
+            if (newOrders.length > 0 && !isCustomerRoute) {
+              const latest = newOrders[0];
+              triggerKitchenAlert({
+                title: `🍽️ New Order (Table ${latest.tableNumber})`,
+                body: latest.items.map((i: any) => `${i.quantity}x ${i.name}`).join(', '),
+                type: 'order',
+                tableNumber: latest.tableNumber,
+              });
             }
 
             // Merge: remote orders are authoritative, but preserve optimistic local orders
@@ -512,9 +556,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (Array.isArray(remoteCalls)) {
           setWaiterCalls(prev => {
             const prevIds = new Set(prev.map(c => c.id));
-            const hasNew = remoteCalls.some(c => !prevIds.has(c.id));
-            if (hasNew && !isCustomerRoute) {
-              playKitchenChime();
+            const newCalls = remoteCalls.filter(c => !prevIds.has(c.id));
+            if (newCalls.length > 0 && !isCustomerRoute) {
+              const latest = newCalls[0];
+              triggerKitchenAlert({
+                title: `🛎️ Table ${latest.tableNumber} Calling Waiter!`,
+                body: `Table ${latest.tableNumber} requested assistance (${latest.reason || 'Service'}).`,
+                type: 'waiter',
+                tableNumber: latest.tableNumber,
+              });
             }
             return remoteCalls;
           });
@@ -547,6 +597,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Orders storage write error', e);
     }
   }, [orders]);
+
+  // Synchronize OS App Badge count (e.g. 2 if 2 active tickets received) on installed PWA icon
+  useEffect(() => {
+    if (isCustomerRoute) return;
+    const targetRestId = activeRestaurant.id || activeRestaurantId || (ownerSession?.restaurantId || '');
+    const targetSlug = activeRestaurant.slug || requestedSlug || ownerSession?.restaurantSlug || '';
+
+    const pendingOrders = orders.filter(o => {
+      const match = !o.restaurantId || o.restaurantId === targetRestId || (targetSlug && o.restaurantId.toLowerCase() === targetSlug.toLowerCase());
+      return match && (o.status === 'pending' || o.status === 'preparing');
+    });
+
+    const activeCalls = waiterCalls.filter(c => {
+      return !c.restaurantId || c.restaurantId === targetRestId || (targetSlug && c.restaurantId.toLowerCase() === targetSlug.toLowerCase());
+    });
+
+    const activeTicketCount = pendingOrders.length + activeCalls.length;
+    setAppBadgeCount(activeTicketCount);
+  }, [orders, waiterCalls, isCustomerRoute, activeRestaurant.id, activeRestaurant.slug, activeRestaurantId, requestedSlug, ownerSession]);
 
 
   const showNotification = (msg: string) => {

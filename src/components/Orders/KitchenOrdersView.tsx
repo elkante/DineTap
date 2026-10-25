@@ -12,11 +12,21 @@ import {
   ShoppingBag, 
   Check, 
   AlertCircle,
-  Volume2
+  Volume2,
+  Bell,
+  Smartphone,
+  ShieldCheck
 } from 'lucide-react';
+import { 
+  notifyKitchenNewTicket, 
+  requestKitchenNotificationPermission, 
+  getNotificationPermissionStatus,
+  setAppBadgeCount 
+} from '../../utils/pwaNotifications';
 
 export const KitchenOrdersView: React.FC = () => {
   const [testingChime, setTestingChime] = useState(false);
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(() => getNotificationPermissionStatus());
   const { 
     orders, 
     updateOrderStatus, 
@@ -40,6 +50,28 @@ export const KitchenOrdersView: React.FC = () => {
     (activeRestaurant.slug && c.restaurantId.toLowerCase() === activeRestaurant.slug.toLowerCase())
   );
 
+  const totalActiveTickets = activeOrders.filter(o => o.status === 'pending' || o.status === 'preparing').length + restaurantCalls.length;
+
+  const handleEnableNotifications = async () => {
+    const granted = await requestKitchenNotificationPermission();
+    setNotifPermission(granted ? 'granted' : 'denied');
+    if (granted) {
+      await setAppBadgeCount(totalActiveTickets);
+    }
+  };
+
+  const handleTestAlert = async () => {
+    setTestingChime(true);
+    await notifyKitchenNewTicket({
+      title: '🔔 Test Kitchen Loud Buzzer & PWA Badge',
+      body: `Table 4: 2x Signature Dish. Badge counter updated to ${Math.max(1, totalActiveTickets)}.`,
+      badgeCount: Math.max(1, totalActiveTickets),
+      ticketType: 'order',
+      tableNumber: '4'
+    });
+    setTimeout(() => setTestingChime(false), 1200);
+  };
+
   const todayRevenue = restaurantOrders
     .filter(o => o.status !== 'pending')
     .reduce((sum, o) => sum + o.total, 0);
@@ -61,7 +93,7 @@ export const KitchenOrdersView: React.FC = () => {
               Kitchen Display (KDS)
             </h1>
             <p className="text-[11px] text-neutral-500">
-              {activeRestaurant.name} · {activeOrders.length} active tickets
+              {activeRestaurant.name} · {activeOrders.length} active tickets · App Badge: {totalActiveTickets}
             </p>
           </div>
         </div>
@@ -69,20 +101,16 @@ export const KitchenOrdersView: React.FC = () => {
         <div className="flex items-center gap-2 text-xs">
           <button
             type="button"
-            onClick={() => {
-              setTestingChime(true);
-              playKitchenChime();
-              setTimeout(() => setTestingChime(false), 1200);
-            }}
+            onClick={handleTestAlert}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs ${
               testingChime 
                 ? 'bg-amber-500 text-neutral-950 scale-105 ring-2 ring-amber-300' 
                 : 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300/60'
             }`}
-            title="Test loud kitchen buzzer sound"
+            title="Test loud kitchen buzzer sound and app icon badge count"
           >
             <Volume2 className={`w-3.5 h-3.5 ${testingChime ? 'animate-bounce text-neutral-950' : 'text-amber-700'}`} />
-            <span>{testingChime ? 'Alert Sounding!' : 'Test Loud Alert'}</span>
+            <span>{testingChime ? 'Alert & Badge Fired!' : 'Test Loud Alert & Badge'}</span>
           </button>
           <button
             onClick={() => setCurrentView('flipbook')}
@@ -90,6 +118,43 @@ export const KitchenOrdersView: React.FC = () => {
           >
             ← Menu
           </button>
+        </div>
+      </div>
+
+      {/* PWA Background Alerts & Badging Status Banner */}
+      <div className="p-3 bg-gradient-to-r from-stone-900 via-[#0c2e22] to-stone-900 text-stone-100 rounded-2xl border border-amber-500/30 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+            <Bell className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-white">Installed PWA Background Alerts &amp; Icon Badging</span>
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                Badge: {totalActiveTickets}
+              </span>
+            </div>
+            <p className="text-[11px] text-stone-300 mt-0.5">
+              When closed, new table orders &amp; waiter calls play loud chime alerts and show the exact ticket count (e.g. 2) directly on your home screen icon.
+            </p>
+          </div>
+        </div>
+
+        <div className="shrink-0 flex items-center gap-2 w-full sm:w-auto justify-end">
+          {notifPermission === 'granted' ? (
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/20 text-emerald-300 rounded-lg text-[11px] font-bold border border-emerald-500/30">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Background Alerts Active</span>
+            </div>
+          ) : (
+            <button
+              onClick={handleEnableNotifications}
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 shadow-sm"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>Enable Background Alerts</span>
+            </button>
+          )}
         </div>
       </div>
 

@@ -16,6 +16,7 @@ import {
   Clock,
   Sparkles
 } from 'lucide-react';
+import { ScrollWorld } from '../3D/ScrollWorld';
 
 export const FlipbookViewer: React.FC = () => {
   const { 
@@ -150,8 +151,11 @@ export const FlipbookViewer: React.FC = () => {
         background: `radial-gradient(ellipse at 50% 30%, ${coverThemeColor}55 0%, #111412 85%, #0a0c0b 100%)`
       }}
     >
+      {/* 3D Ambient Dust Layer */}
+      <ScrollWorld className="opacity-25" />
+
       {/* Top Subtle Status Bar */}
-      <div className="max-w-xl mx-auto w-full flex items-center justify-between text-xs px-2 mb-1.5 text-neutral-400">
+      <div className="max-w-xl mx-auto w-full flex items-center justify-between text-xs px-2 mb-1.5 text-neutral-400 relative z-10">
         <div className="flex items-center gap-2 truncate">
           <span className="font-serif font-bold text-amber-200/90 truncate tracking-wide">
             {currentPage.layout === 'cover' ? activeRestaurant.name : currentPage.title}
