@@ -7,11 +7,7 @@ import {
   Store,
   KeyRound,
   Mail,
-  Smartphone,
-  Layers,
-  ChevronDown,
-  ChevronUp,
-  Palette
+  Smartphone
 } from 'lucide-react';
 import { 
   registerRestaurant, 
@@ -22,20 +18,11 @@ import {
 } from '../../utils/supabase';
 import { useApp } from '../../context/AppContext';
 import { PWAInstallButton } from '../PWAInstallButton';
-import { ShaderGradientCanvas } from '../3D/ShaderGradientCanvas';
-import { LiquidLogo3D } from '../3D/LiquidLogo3D';
-import { ScrollWorld } from '../3D/ScrollWorld';
-import { LiquidGlassCard } from '../3D/LiquidGlassCard';
 
 export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPricing }) => {
   const { showNotification } = useApp();
   const [authModal, setAuthModal] = useState<'signup' | 'login' | null>(null);
   const [loading, setLoading] = useState(false);
-  const [shaderPalette, setShaderPalette] = useState<'emeraldGold' | 'midnightLuxury' | 'sunsetAmber'>('emeraldGold');
-  const [enableShader, setEnableShader] = useState(true);
-  const [enableScrollWorld, setEnableScrollWorld] = useState(true);
-  const [hudCollapsed, setHudCollapsed] = useState(false);
-  const [showLogoModal, setShowLogoModal] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [contactConfig, setContactConfig] = useState<PlatformContactConfig>(() => getStoredPlatformContact());
 
@@ -157,13 +144,10 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
 
   return (
     <div className="relative min-h-screen bg-[#FAF7F2] text-stone-900 font-sans selection:bg-amber-200 selection:text-amber-950 overflow-x-hidden">
-      {/* 3D Scroll World Parallax Layer (Ambient luxury embers & depth rings across the page) */}
-      {enableScrollWorld && <ScrollWorld />}
-
       {/* Top Navbar: Modern, Ultra-clean & Mobile-first */}
       <nav className="border-b border-stone-200/80 sticky top-0 z-40 bg-white/95 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-3.5 sm:px-6 h-14 sm:h-18 flex items-center justify-between gap-2 sm:gap-4">
-          {/* Logo with secret 6-tap easter egg to /sys-hq and 3D preview on hover */}
+          {/* Logo with secret 6-tap easter egg to /sys-hq */}
           <button 
             onClick={handleLogoTap}
             type="button"
@@ -175,7 +159,7 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
             </div>
             <div className="min-w-0">
               <span className="font-serif font-extrabold text-base sm:text-xl tracking-tight text-stone-900 block leading-tight">TapMenu</span>
-              <span className="text-[9px] sm:text-[10px] block text-amber-800 font-mono uppercase tracking-wider font-bold truncate">3D Menus &amp; Orders</span>
+              <span className="text-[9px] sm:text-[10px] block text-amber-800 font-mono uppercase tracking-wider font-bold truncate">Realistic Menus &amp; Orders</span>
             </div>
           </button>
 
@@ -205,7 +189,7 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
         </div>
       </nav>
 
-      {/* Hero Section: Full-bleed background with interactive Shader Gradient Canvas and 3D Liquid Logo */}
+      {/* Hero Section: Full-bleed background with atmospheric vignette */}
       <section id="hero" className="relative min-h-[580px] sm:min-h-[640px] lg:min-h-[680px] flex items-center justify-center text-center overflow-hidden bg-stone-900">
         {/* Full-bleed background restaurant hero photography */}
         <img
@@ -214,34 +198,25 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
           className="absolute inset-0 w-full h-full object-cover object-center transform scale-105 filter brightness-105 contrast-105"
         />
 
-        {/* Dynamic Liquid Shader Gradient (Procedural GLSL Fluid Waves) */}
-        {enableShader && (
-          <ShaderGradientCanvas
-            palette={shaderPalette}
-            speed={0.75}
-            interactive={true}
-            className="absolute inset-0 opacity-45 mix-blend-screen pointer-events-none z-1"
-          />
-        )}
-
         {/* Balanced Light Scrim & Atmospheric Vignette */}
-        <div className="absolute inset-0 bg-stone-950/40 sm:bg-stone-950/35 z-2" />
+        <div className="absolute inset-0 bg-stone-950/45 sm:bg-stone-950/40 z-2" />
         <div 
           className="absolute inset-0 pointer-events-none z-2"
           style={{
-            background: 'radial-gradient(circle at center, rgba(12, 46, 34, 0.25) 0%, rgba(10, 14, 12, 0.65) 100%)'
+            background: 'radial-gradient(circle at center, rgba(12, 46, 34, 0.35) 0%, rgba(10, 14, 12, 0.75) 100%)'
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-stone-950/80 via-transparent to-stone-950/40 pointer-events-none z-2" />
+        <div className="absolute inset-0 bg-gradient-to-t from-stone-950/85 via-transparent to-stone-950/45 pointer-events-none z-2" />
 
-        {/* Hero Content directly ON TOP of the background image & shader */}
+        {/* Hero Content directly ON TOP of the background image */}
         <div className="relative z-10 max-w-5xl mx-auto px-4 py-12 sm:py-16 flex flex-col items-center">
-          {/* 3D Liquid Logo Medallion (Interactive PBR Gold & Liquid Glass Torus) */}
+          {/* Luxury Gold & Emerald Medallion Seal */}
           <div className="mb-4 flex flex-col items-center">
-            <LiquidLogo3D size={110} interactive={true} className="drop-shadow-[0_12px_24px_rgba(0,0,0,0.6)]" />
-            <span className="text-[10px] font-mono font-bold text-amber-300/90 tracking-widest uppercase mt-1">
-              Interactive 3D Liquid Emblem &bull; Drag to Rotate
-            </span>
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-[#0c2e22] via-[#144233] to-[#091f17] border-2 border-[#D4AF37] flex items-center justify-center shadow-[0_12px_28px_rgba(0,0,0,0.6),0_0_20px_rgba(212,175,55,0.3)]">
+              <span className="font-serif font-black text-3xl sm:text-4xl text-transparent bg-clip-text bg-gradient-to-b from-[#FFF2A8] via-[#D4AF37] to-[#997715] drop-shadow">
+                T
+              </span>
+            </div>
           </div>
 
           {/* Subtle Luxury Badge */}
@@ -316,17 +291,17 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6">
-          <LiquidGlassCard className="p-6 bg-white/90 border-stone-200/80">
+          <div className="p-6 bg-white/95 backdrop-blur-md rounded-3xl border border-stone-200/90 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
             <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-800 flex items-center justify-center font-bold mb-4 shadow-xs">
               📖
             </div>
             <h3 className="font-serif text-lg font-bold text-stone-900 mb-1">Authentic Menu Book</h3>
             <p className="text-xs text-stone-600 leading-relaxed">
-              Not another clinical PDF or generic web form. TapMenu provides a realistic luxury leather folio with 3D turning pages, debossed foil, and category tabs.
+              Not another clinical PDF or generic web form. TapMenu provides a realistic luxury leather folio with realistic turning pages, debossed foil, and category tabs.
             </p>
-          </LiquidGlassCard>
+          </div>
 
-          <LiquidGlassCard className="p-6 bg-white/90 border-stone-200/80">
+          <div className="p-6 bg-white/95 backdrop-blur-md rounded-3xl border border-stone-200/90 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
             <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-800 flex items-center justify-center font-bold mb-4 shadow-xs">
               📱
             </div>
@@ -334,9 +309,9 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
             <p className="text-xs text-stone-600 leading-relaxed">
               Encode durable digital smart table pucks or print scannable QR stand cards. Orders always carry the specific table number straight to the kitchen.
             </p>
-          </LiquidGlassCard>
+          </div>
 
-          <LiquidGlassCard className="p-6 bg-white/90 border-stone-200/80">
+          <div className="p-6 bg-white/95 backdrop-blur-md rounded-3xl border border-stone-200/90 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
             <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-900 flex items-center justify-center font-bold mb-4 shadow-xs">
               💳
             </div>
@@ -344,89 +319,9 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
             <p className="text-xs text-stone-600 leading-relaxed">
               No online payment gateways withholding your funds for days. Diners pay your staff directly via Card POS terminal, Cash, or Instant Bank Transfer.
             </p>
-          </LiquidGlassCard>
-        </div>
-      </section>
-
-      {/* Unified Bottom 3D Visual Experience Dock (Three.js Skill Directive) */}
-      <aside 
-        aria-label="3D Visual Controls"
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 max-w-[min(940px,94vw)] transition-transform duration-300"
-        style={{
-          transform: hudCollapsed ? 'translate(-50%, calc(100% - 24px))' : 'translate(-50%, 0)',
-        }}
-      >
-        <div className="flex flex-col items-center">
-          {/* Collapse / Expand Toggle Button */}
-          <button
-            type="button"
-            onClick={() => setHudCollapsed(!hudCollapsed)}
-            className="px-3 py-1 bg-stone-950/80 hover:bg-stone-900 text-stone-300 rounded-t-xl text-[10px] font-bold border-t border-x border-amber-500/30 flex items-center gap-1 shadow-md transition-colors"
-          >
-            {hudCollapsed ? <ChevronUp className="w-3 h-3 text-amber-400" /> : <ChevronDown className="w-3 h-3 text-amber-400" />}
-            <span>{hudCollapsed ? 'Show 3D Controls' : 'Hide 3D Controls'}</span>
-          </button>
-
-          {/* Control Bar */}
-          <div className="flex items-center gap-2 sm:gap-4 px-3.5 py-2 rounded-2xl bg-stone-950/90 text-stone-200 border border-amber-500/30 shadow-2xl backdrop-blur-xl text-xs">
-            <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-400 shrink-0">
-              <Layers className="w-3.5 h-3.5" />
-              <span>3D Engine:</span>
-            </div>
-
-            {/* Toggle Shader */}
-            <button
-              onClick={() => setEnableShader(!enableShader)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
-                enableShader ? 'bg-emerald-900/60 text-emerald-300 border border-emerald-500/40' : 'bg-stone-800 text-stone-400'
-              }`}
-            >
-              Liquid Shader: {enableShader ? 'ON' : 'OFF'}
-            </button>
-
-            {/* Shader Palette selector */}
-            {enableShader && (
-              <div className="hidden sm:flex items-center gap-1 text-[11px]">
-                <Palette className="w-3 h-3 text-stone-400" />
-                <button
-                  onClick={() => setShaderPalette('emeraldGold')}
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    shaderPalette === 'emeraldGold' ? 'bg-[#D4AF37] text-stone-950' : 'text-stone-400 hover:text-white'
-                  }`}
-                >
-                  Emerald Gold
-                </button>
-                <button
-                  onClick={() => setShaderPalette('midnightLuxury')}
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    shaderPalette === 'midnightLuxury' ? 'bg-[#D4AF37] text-stone-950' : 'text-stone-400 hover:text-white'
-                  }`}
-                >
-                  Midnight Noir
-                </button>
-                <button
-                  onClick={() => setShaderPalette('sunsetAmber')}
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    shaderPalette === 'sunsetAmber' ? 'bg-[#D4AF37] text-stone-950' : 'text-stone-400 hover:text-white'
-                  }`}
-                >
-                  Sunset Amber
-                </button>
-              </div>
-            )}
-
-            {/* Toggle Scroll World */}
-            <button
-              onClick={() => setEnableScrollWorld(!enableScrollWorld)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
-                enableScrollWorld ? 'bg-amber-900/60 text-amber-300 border border-amber-500/40' : 'bg-stone-800 text-stone-400'
-              }`}
-            >
-              Scroll World: {enableScrollWorld ? 'ON' : 'OFF'}
-            </button>
           </div>
         </div>
-      </aside>
+      </section>
 
 
       {/* Footer */}
