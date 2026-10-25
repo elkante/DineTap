@@ -115,7 +115,7 @@ export const TopNav: React.FC<{
                 border-r-[5px] border-r-transparent
                 border-b-[6px] border-b-neutral-900" />
               <div className="bg-neutral-900 text-white text-[10px] font-semibold px-2.5 py-1 rounded-xl whitespace-nowrap shadow-lg">
-                👋 We're here!
+                👋 Call Waiter
               </div>
             </div>
           </div>
