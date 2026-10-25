@@ -33,7 +33,9 @@ import {
   Phone,
   RotateCcw,
   Receipt,
-  Sparkles
+  Sparkles,
+  Menu,
+  X
 } from 'lucide-react';
 import { FoodItem, Order } from '../../types';
 import { getDishFallbackImage } from '../Flipbook/FlipPageRenderer';
@@ -73,6 +75,7 @@ export const RestaurantDashboard: React.FC = () => {
   const [tableQrMap, setTableQrMap] = useState<Record<string, string>>({});
   const [isOrderCardsOpen, setIsOrderCardsOpen] = useState(false);
   const [isMultiStoreOpen, setIsMultiStoreOpen] = useState(false);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
 
   // Live Digital Kitchen Date & Clock (Network-verified from API, immune to device tampering)
   const [liveDate, setLiveDate] = useState(() => formatNetworkDate());
@@ -107,41 +110,89 @@ export const RestaurantDashboard: React.FC = () => {
 
   // Day Shift Management (Start Day / End Day Daily Register)
   const shiftKey = `tapmenu_shift_${activeRestaurant.id || 'default'}`;
-  const [isDayActive, setIsDayActive] = useState<boolean>(() => {
+  const [shiftData, setShiftData] = useState<{
+    isActive: boolean;
+    startedAt: string;
+    startedAtTs: number;
+    endedAt?: string;
+    endedAtTs?: number;
+  }>(() => {
     try {
       const saved = localStorage.getItem(shiftKey);
       if (saved) {
         const parsed = JSON.parse(saved);
-        return parsed.isActive ?? true;
+        return {
+          isActive: parsed.isActive ?? true,
+          startedAt: parsed.startedAt || '8:00 AM',
+          startedAtTs: parsed.startedAtTs || Date.now() - 3600000,
+          endedAt: parsed.endedAt,
+          endedAtTs: parsed.endedAtTs
+        };
       }
     } catch {}
-    return true; // Default shift active
+    const now = Date.now();
+    return {
+      isActive: true,
+      startedAt: '8:00 AM',
+      startedAtTs: now - 3600000
+    };
   });
-  const [dayStartTime, setDayStartTime] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem(shiftKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.startedAt || '8:00 AM';
-      }
-    } catch {}
-    return '8:00 AM';
-  });
+
+  const isDayActive = shiftData.isActive;
+  const dayStartTime = shiftData.startedAt;
   const [isEndDayModalOpen, setIsEndDayModalOpen] = useState(false);
 
   const handleStartDay = () => {
-    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    setIsDayActive(true);
-    setDayStartTime(nowTime);
-    localStorage.setItem(shiftKey, JSON.stringify({ isActive: true, startedAt: nowTime, startedAtTs: Date.now() }));
-    showNotification(`🌅 Day Shift Started at ${nowTime}! Tracking live orders.`);
+    const verifiedDate = getNetworkVerifiedDate();
+    const nowTime = formatNetworkTime(verifiedDate);
+    const nowTs = verifiedDate.getTime();
+    const newShift = {
+      isActive: true,
+      startedAt: nowTime,
+      startedAtTs: nowTs
+    };
+    setShiftData(newShift);
+    localStorage.setItem(shiftKey, JSON.stringify(newShift));
+    showNotification(`🌅 Fresh Day Shift Started at ${nowTime}! Previous orders archived.`);
   };
 
   const handleConfirmEndDay = () => {
-    setIsDayActive(false);
-    localStorage.setItem(shiftKey, JSON.stringify({ isActive: false, endedAt: liveClock, startedAt: dayStartTime }));
+    const verifiedDate = getNetworkVerifiedDate();
+    const endedTime = formatNetworkTime(verifiedDate);
+    const endedTs = verifiedDate.getTime();
+    const closedShift = {
+      ...shiftData,
+      isActive: false,
+      endedAt: endedTime,
+      endedAtTs: endedTs
+    };
+    setShiftData(closedShift);
+    localStorage.setItem(shiftKey, JSON.stringify(closedShift));
+
+    // Archive this shift's reconciliation report permanently to shift history
+    try {
+      const historyKey = `tapmenu_shift_history_${activeRestaurant.id || 'default'}`;
+      const existingHistory = JSON.parse(localStorage.getItem(historyKey) || '[]');
+      existingHistory.unshift({
+        shiftId: `sh-${endedTs}`,
+        startedAt: shiftData.startedAt,
+        startedAtTs: shiftData.startedAtTs,
+        endedAt: endedTime,
+        endedAtTs: endedTs,
+        date: formatNetworkDate(verifiedDate),
+        totalRevenue: totalDayRevenue,
+        totalOrders: currentShiftOrders.length,
+        servedOrders: servedOrdersCount,
+        vat: totalDayVat,
+        payments: paymentBreakdown
+      });
+      localStorage.setItem(historyKey, JSON.stringify(existingHistory.slice(0, 90))); // keep 90 days history
+    } catch (err) {
+      console.warn('Shift history archive notice:', err);
+    }
+
     setIsEndDayModalOpen(false);
-    showNotification(`🌙 Day Shift Ended & Reconciled! Z-Report archived.`);
+    showNotification(`🌙 Day Shift Closed & Reconciled! All orders archived.`);
   };
 
   // Print Thermal Ticket Slip (ESC/POS Kitchen Slip emulation)
@@ -329,14 +380,24 @@ export const RestaurantDashboard: React.FC = () => {
   const planDisplayName = planConfig?.name || 'Basic';
   // ─────────────────────────────────────────────────────────────────────────
 
-  // Filter orders for active restaurant (matching on id, slug, or if id is empty)
+  // Filter all orders for active restaurant (matching on id, slug, or if id is empty)
   const restaurantOrders = orders.filter(o => 
     !o.restaurantId ||
     o.restaurantId === activeRestaurant.id ||
     (activeRestaurant.slug && o.restaurantId.toLowerCase() === activeRestaurant.slug.toLowerCase())
   );
-  const activeOrders = restaurantOrders.filter(o => o.status !== 'served');
-  const completedOrders = restaurantOrders.filter(o => o.status === 'served');
+
+  // Active Daily Shift Filter:
+  // When a shift is active, only show tickets placed during the active shift!
+  // Orders from prior closed shifts are preserved and accessible in the "Archive & Reports" tab.
+  const currentShiftOrders = restaurantOrders.filter(o => {
+    if (!shiftData.isActive) return false;
+    const orderTs = o.createdAtTimestamp || 0;
+    return orderTs >= (shiftData.startedAtTs - 60000); // 1 min grace buffer
+  });
+
+  const activeOrders = currentShiftOrders.filter(o => o.status !== 'served');
+  const completedOrders = currentShiftOrders.filter(o => o.status === 'served');
 
   const restaurantCalls = waiterCalls.filter(c => 
     !c.restaurantId ||
@@ -344,17 +405,17 @@ export const RestaurantDashboard: React.FC = () => {
     (activeRestaurant.slug && c.restaurantId.toLowerCase() === activeRestaurant.slug.toLowerCase())
   );
 
-  // ── Cumulative Day Shift Accumulator ──────────────────────────────────
-  const totalDayRevenue = restaurantOrders.reduce((sum, o) => sum + o.total, 0);
-  const totalDaySubtotal = restaurantOrders.reduce((sum, o) => sum + (o.subtotal || Math.round(o.total / 1.075)), 0);
-  const totalDayVat = restaurantOrders.reduce((sum, o) => sum + (o.vat || (o.total - Math.round(o.total / 1.075))), 0);
-  const totalDinersCount = restaurantOrders.length;
+  // ── Cumulative Day Shift Accumulator (Current Shift Only) ───────────────
+  const totalDayRevenue = currentShiftOrders.reduce((sum, o) => sum + o.total, 0);
+  const totalDaySubtotal = currentShiftOrders.reduce((sum, o) => sum + (o.subtotal || Math.round(o.total / 1.075)), 0);
+  const totalDayVat = currentShiftOrders.reduce((sum, o) => sum + (o.vat || (o.total - Math.round(o.total / 1.075))), 0);
+  const totalDinersCount = currentShiftOrders.length;
   const servedOrdersCount = completedOrders.length;
 
   const paymentBreakdown = {
-    pos: restaurantOrders.filter(o => o.paymentMethod === 'pos' || !o.paymentMethod).reduce((sum, o) => sum + o.total, 0),
-    cash: restaurantOrders.filter(o => o.paymentMethod === 'cash').reduce((sum, o) => sum + o.total, 0),
-    transfer: restaurantOrders.filter(o => o.paymentMethod === 'transfer').reduce((sum, o) => sum + o.total, 0),
+    pos: currentShiftOrders.filter(o => o.paymentMethod === 'pos' || !o.paymentMethod).reduce((sum, o) => sum + o.total, 0),
+    cash: currentShiftOrders.filter(o => o.paymentMethod === 'cash').reduce((sum, o) => sum + o.total, 0),
+    transfer: currentShiftOrders.filter(o => o.paymentMethod === 'transfer').reduce((sum, o) => sum + o.total, 0),
   };
 
   // Live ticket elapsed age with color-coded urgency
@@ -645,7 +706,17 @@ export const RestaurantDashboard: React.FC = () => {
       {/* Top Staff Navigation */}
       <header className="bg-neutral-900 text-white sticky top-0 z-40 border-b border-neutral-800">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            {/* Mobile Hamburger Drawer Toggle (Matches PC Left Panel) */}
+            <button
+              type="button"
+              onClick={() => setIsMobileDrawerOpen(true)}
+              className="md:hidden w-10 h-10 rounded-xl bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-amber-400 border border-neutral-700 flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+              aria-label="Open Kitchen Navigation Drawer"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+
             <div className="w-10 h-10 rounded-xl bg-neutral-800 border border-neutral-700/80 flex items-center justify-center overflow-hidden shrink-0">
               {activeRestaurant.logo && (activeRestaurant.logo.startsWith('data:') || activeRestaurant.logo.startsWith('http') || activeRestaurant.logo.startsWith('/')) ? (
                 <img src={activeRestaurant.logo} alt={activeRestaurant.name} className="w-full h-full object-cover" />
@@ -655,10 +726,7 @@ export const RestaurantDashboard: React.FC = () => {
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="text-sm sm:text-base font-extrabold truncate">{activeRestaurant.name}</h1>
-                <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 shrink-0">
-                  /?r={activeRestaurant.slug}
-                </span>
+                <h1 className="text-sm sm:text-base font-extrabold truncate text-white">{activeRestaurant.name}</h1>
               </div>
               <span className="text-[11px] text-neutral-400 block truncate">
                 Staff & Kitchen Management Portal
@@ -2151,16 +2219,8 @@ export const RestaurantDashboard: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-3 border-t border-neutral-100">
               <button
                 type="button"
-                onClick={handlePrintZReport}
-                className="w-full sm:w-auto px-4 py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5"
-              >
-                <Printer className="w-3.5 h-3.5 text-neutral-600" />
-                <span>Print Z-Report Slip</span>
-              </button>
-              <button
-                type="button"
                 onClick={handleConfirmEndDay}
-                className="w-full sm:w-auto px-5 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-md"
+                className="w-full sm:w-auto px-6 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
               >
                 <Check className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Close Day & Archive</span>
@@ -2184,6 +2244,170 @@ export const RestaurantDashboard: React.FC = () => {
         onClose={() => setIsMultiStoreOpen(false)}
         onOpenPricing={() => setActiveTab('settings')}
       />
+
+      {/* Mobile Slide-Over Navigation Drawer (Equivalent to Desktop Left Side Panel) */}
+      {isMobileDrawerOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200"
+            onClick={() => setIsMobileDrawerOpen(false)}
+          />
+
+          {/* Drawer Content */}
+          <div className="relative w-72 max-w-[85vw] h-full bg-neutral-900 border-r border-neutral-800 text-white flex flex-col justify-between shadow-2xl z-10 animate-in slide-in-from-left duration-200">
+            <div>
+              {/* Header */}
+              <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-neutral-800 border border-neutral-700 overflow-hidden flex items-center justify-center shrink-0">
+                    {activeRestaurant.logo && (activeRestaurant.logo.startsWith('data:') || activeRestaurant.logo.startsWith('http') || activeRestaurant.logo.startsWith('/')) ? (
+                      <img src={activeRestaurant.logo} alt={activeRestaurant.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-lg">{activeRestaurant.logo || '🍽️'}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-extrabold text-sm text-white truncate">{activeRestaurant.name}</h3>
+                    <span className="text-[10px] text-amber-300 font-bold block">{planDisplayName} Plan</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMobileDrawerOpen(false)}
+                  className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
+                  aria-label="Close navigation drawer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Navigation Tabs */}
+              <nav className="p-3 space-y-1">
+                <button
+                  onClick={() => { setActiveTab('kds'); setIsMobileDrawerOpen(false); }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                    activeTab === 'kds'
+                      ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                      : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <ChefHat className="w-4 h-4 shrink-0" />
+                    <span>Kitchen Display</span>
+                  </div>
+                  {activeOrders.length > 0 && (
+                    <span className={`px-1.5 py-0.5 rounded-full font-mono text-[10px] font-extrabold ${
+                      activeTab === 'kds' ? 'bg-neutral-950 text-white' : 'bg-amber-500 text-neutral-950'
+                    }`}>
+                      {activeOrders.length}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => { setActiveTab('menu'); setIsMobileDrawerOpen(false); }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                    activeTab === 'menu'
+                      ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                      : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Utensils className="w-4 h-4 shrink-0" />
+                    <span>Menu Dishes</span>
+                  </div>
+                  <span className="text-[10px] font-mono opacity-80">({allDishes.length})</span>
+                </button>
+
+                <button
+                  onClick={() => { setActiveTab('inventory'); setIsMobileDrawerOpen(false); }}
+                  className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                    activeTab === 'inventory'
+                      ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                      : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                  }`}
+                >
+                  <Package className="w-4 h-4 shrink-0" />
+                  <span>Inventory Manager</span>
+                </button>
+
+                <button
+                  onClick={() => { setActiveTab('expenses'); setIsMobileDrawerOpen(false); }}
+                  className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                    activeTab === 'expenses'
+                      ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                      : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                  }`}
+                >
+                  <DollarSign className="w-4 h-4 shrink-0" />
+                  <span>Expense Ledger</span>
+                </button>
+
+                <button
+                  onClick={() => { setActiveTab('archive'); setIsMobileDrawerOpen(false); }}
+                  className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                    activeTab === 'archive'
+                      ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                      : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                  }`}
+                >
+                  <Calendar className="w-4 h-4 shrink-0" />
+                  <span>Archive & Reports</span>
+                </button>
+
+                <button
+                  onClick={() => { setActiveTab('tables'); setIsMobileDrawerOpen(false); }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                    activeTab === 'tables'
+                      ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                      : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <QrCode className="w-4 h-4 shrink-0" />
+                    <span>Table QR Codes</span>
+                  </div>
+                  <span className="text-[10px] font-mono opacity-80">({activeRestaurant.tables.length})</span>
+                </button>
+
+                <button
+                  onClick={() => { setActiveTab('settings'); setIsMobileDrawerOpen(false); }}
+                  className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                    activeTab === 'settings'
+                      ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                      : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                  }`}
+                >
+                  <Settings className="w-4 h-4 shrink-0" />
+                  <span>Settings</span>
+                </button>
+              </nav>
+            </div>
+
+            {/* Bottom Actions inside Drawer */}
+            <div className="p-3 border-t border-neutral-800 space-y-2">
+              <button
+                type="button"
+                onClick={() => { setIsOrderCardsOpen(true); setIsMobileDrawerOpen(false); }}
+                className="w-full p-2.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-amber-500/20 to-yellow-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-all text-center"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Order Smart Cards</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full py-2.5 bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/40 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Log Out</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Notched Bottom Navigation for Mobile (Replacing the top tab bar) */}
       <NotchedBottomBar

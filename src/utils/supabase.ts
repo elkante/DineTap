@@ -563,7 +563,8 @@ export async function loginRestaurantOwner(
       const { data: itemRows } = await supabase
         .from('menu_items')
         .select('*')
-        .eq('restaurant_id', rRow.id);
+        .or(`restaurant_id.eq.${rRow.id},restaurant_id.eq.${rRow.slug}`)
+        .order('created_at', { ascending: true });
 
       const mapped = mapDbRowToRestaurant(rRow, itemRows || []);
       const sess: OwnerSession = {
@@ -627,7 +628,8 @@ export async function loginRestaurantOwner(
       const { data: itemRows } = await supabase
         .from('menu_items')
         .select('*')
-        .eq('restaurant_id', rRow.id);
+        .or(`restaurant_id.eq.${rRow.id},restaurant_id.eq.${rRow.slug}`)
+        .order('created_at', { ascending: true });
 
       const mapped = mapDbRowToRestaurant(rRow, itemRows || []);
       const sess: OwnerSession = {
