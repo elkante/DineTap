@@ -145,7 +145,7 @@ export const FlipbookViewer: React.FC = () => {
 
   return (
     <div 
-      className="min-h-[calc(100vh-3.5rem)] text-neutral-100 flex flex-col justify-between py-2 sm:py-4 px-2 sm:px-6 relative select-none overflow-x-hidden"
+      className="min-h-[calc(100vh-3.5rem)] [@supports(min-height:100dvh)]:min-h-[calc(100dvh-3.5rem)] text-neutral-100 flex flex-col justify-between py-2 sm:py-4 px-2 sm:px-6 relative select-none overflow-x-hidden"
       style={{
         background: `radial-gradient(ellipse at 50% 30%, ${coverThemeColor}55 0%, #111412 85%, #0a0c0b 100%)`
       }}
@@ -222,11 +222,13 @@ export const FlipbookViewer: React.FC = () => {
 
             {/* Layered Paper Stack Edge (Bottom & Right) to give true 3D book thickness */}
             <div 
-              className="w-full h-[490px] xs:h-[550px] sm:h-[620px] relative rounded-2xl overflow-hidden bg-[#FAF7F2]"
+              className="w-full h-[490px] xs:h-[550px] sm:h-[620px] relative rounded-2xl bg-[#FAF7F2]"
               style={{
                 boxShadow: `${Math.min(4, Math.max(1, Math.ceil((pages.length - 1 - currentPageIndex) / 2))) >= 1 ? '2px 2px 0 #ede8db, ' : ''}${Math.min(4, Math.max(1, Math.ceil((pages.length - 1 - currentPageIndex) / 2))) >= 2 ? '4px 4px 0 #e0d9c8, ' : ''}${Math.min(4, Math.max(1, Math.ceil((pages.length - 1 - currentPageIndex) / 2))) >= 3 ? '6px 6px 0 #d5ccb8, ' : ''}${Math.min(4, Math.max(1, Math.ceil((pages.length - 1 - currentPageIndex) / 2))) >= 4 ? '8px 8px 0 #c8bfa7, ' : ''}12px 14px 28px rgba(0,0,0,0.55)`,
                 perspective: '2200px',
-                transformStyle: 'preserve-3d'
+                WebkitPerspective: '2200px',
+                transformStyle: 'preserve-3d',
+                WebkitTransformStyle: 'preserve-3d'
               }}
             >
               {/* Spine Gutter Shadow overlay down the left side */}
@@ -260,7 +262,7 @@ export const FlipbookViewer: React.FC = () => {
                 </div>
               ) : (
                 /* Active 3D Flipping Animation: Base Layer + Turning Leaf */
-                <div className="w-full h-full relative" style={{ perspective: '2200px', transformStyle: 'preserve-3d' }}>
+                <div className="w-full h-full relative" style={{ perspective: '2200px', WebkitPerspective: '2200px', transformStyle: 'preserve-3d', WebkitTransformStyle: 'preserve-3d' }}>
                   {/* Base Underneath Layer (Revealed page or background) */}
                   <div className="absolute inset-0 w-full h-full">
                     <FlipPageRenderer

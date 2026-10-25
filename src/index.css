@@ -15,19 +15,23 @@
    ========================================================================= */
 @keyframes bookFlipForward {
   0% {
+    -webkit-transform: perspective(2200px) rotateY(0deg) skewY(0deg) scale(1);
     transform: perspective(2200px) rotateY(0deg) skewY(0deg) scale(1);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
   30% {
+    -webkit-transform: perspective(2200px) rotateY(-35deg) skewY(-2.5deg) scale(0.985) translateZ(25px);
     transform: perspective(2200px) rotateY(-35deg) skewY(-2.5deg) scale(0.985) translateZ(25px);
     box-shadow: -15px 10px 30px rgba(0, 0, 0, 0.35);
   }
   70% {
+    -webkit-transform: perspective(2200px) rotateY(-85deg) skewY(-3.5deg) scale(0.96) translateZ(40px);
     transform: perspective(2200px) rotateY(-85deg) skewY(-3.5deg) scale(0.96) translateZ(40px);
     box-shadow: -30px 15px 45px rgba(0, 0, 0, 0.45);
     opacity: 0.95;
   }
   100% {
+    -webkit-transform: perspective(2200px) rotateY(-125deg) skewY(-4deg) scale(0.94) translateZ(50px);
     transform: perspective(2200px) rotateY(-125deg) skewY(-4deg) scale(0.94) translateZ(50px);
     box-shadow: -45px 20px 60px rgba(0, 0, 0, 0.5);
     opacity: 0;
@@ -36,24 +40,34 @@
 
 @keyframes bookFlipBackward {
   0% {
+    -webkit-transform: perspective(2200px) rotateY(-125deg) skewY(-4deg) scale(0.94) translateZ(50px);
     transform: perspective(2200px) rotateY(-125deg) skewY(-4deg) scale(0.94) translateZ(50px);
     box-shadow: -45px 20px 60px rgba(0, 0, 0, 0.5);
     opacity: 0;
   }
   30% {
+    -webkit-transform: perspective(2200px) rotateY(-85deg) skewY(-3.5deg) scale(0.96) translateZ(40px);
     transform: perspective(2200px) rotateY(-85deg) skewY(-3.5deg) scale(0.96) translateZ(40px);
     box-shadow: -30px 15px 45px rgba(0, 0, 0, 0.45);
     opacity: 0.95;
   }
   70% {
+    -webkit-transform: perspective(2200px) rotateY(-35deg) skewY(-2.5deg) scale(0.985) translateZ(25px);
     transform: perspective(2200px) rotateY(-35deg) skewY(-2.5deg) scale(0.985) translateZ(25px);
     box-shadow: -15px 10px 30px rgba(0, 0, 0, 0.35);
   }
   100% {
+    -webkit-transform: perspective(2200px) rotateY(0deg) skewY(0deg) scale(1);
     transform: perspective(2200px) rotateY(0deg) skewY(0deg) scale(1);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     opacity: 1;
   }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(20%); }
+  100% { transform: translateX(100%); }
 }
 
 @keyframes bookCurlShine {
@@ -70,15 +84,23 @@
 
 .animate-book-flip-next {
   animation: bookFlipForward 520ms cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  -webkit-transform-origin: left center;
   transform-origin: left center;
+  -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
+  -webkit-transform-style: preserve-3d;
+  transform-style: preserve-3d;
   will-change: transform, opacity;
 }
 
 .animate-book-flip-prev {
   animation: bookFlipBackward 520ms cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  -webkit-transform-origin: left center;
   transform-origin: left center;
+  -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
+  -webkit-transform-style: preserve-3d;
+  transform-style: preserve-3d;
   will-change: transform, opacity;
 }
 

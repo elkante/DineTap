@@ -665,7 +665,21 @@ export async function syncOrderToSupabase(order: Order): Promise<boolean> {
       source: order.source || 'qr',
     };
 
-    const { error } = await supabase.from('orders').insert([basePayload]);
+    const fullPayload: Record<string, any> = {
+      ...basePayload,
+      ...(order.customerPhone ? { customer_phone: order.customerPhone } : {}),
+      ...(order.subtotal !== undefined ? { subtotal: order.subtotal } : {}),
+      ...(order.vat !== undefined ? { vat: order.vat } : {}),
+      ...(order.paymentMethod ? { payment_method: order.paymentMethod } : {}),
+    };
+
+    let { error } = await supabase.from('orders').insert([fullPayload]);
+
+    if (error && (error.message?.includes('column') || error.code === '42703')) {
+      // If table lacks newer columns, fall back safely to base columns
+      const fallback = await supabase.from('orders').insert([basePayload]);
+      error = fallback.error;
+    }
 
     if (error) {
       console.warn('Supabase order sync notice:', error.message);
@@ -725,17 +739,34 @@ export async function fetchOrdersFromSupabase(restaurantId: string, slug?: strin
     const { data, error } = await query.order('created_at', { ascending: false });
 
     if (data && !error) {
-      return data.map(row => ({
-        id: row.id,
-        restaurantId: row.restaurant_id,
-        tableNumber: row.table_number,
-        customerName: row.customer_name || 'Guest Diner',
-        items: row.items || [],
-        total: Number(row.total) || 0,
-        status: row.status || 'pending',
-        createdAt: new Date(row.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        source: row.source || 'qr'
-      }));
+      return data.map(row => {
+        const rawDate = row.created_at;
+        const normalizedDate = typeof rawDate === 'string' && rawDate.includes(' ') && !rawDate.includes('T')
+          ? rawDate.replace(' ', 'T')
+          : rawDate;
+        const d = normalizedDate ? new Date(normalizedDate) : new Date();
+        const safeTime = !isNaN(d.getTime()) 
+          ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const safeTs = !isNaN(d.getTime()) ? d.getTime() : Date.now();
+
+        return {
+          id: row.id,
+          restaurantId: row.restaurant_id,
+          tableNumber: row.table_number,
+          customerName: row.customer_name || 'Guest Diner',
+          customerPhone: row.customer_phone || undefined,
+          items: row.items || [],
+          subtotal: row.subtotal ? Number(row.subtotal) : undefined,
+          vat: row.vat ? Number(row.vat) : undefined,
+          total: Number(row.total) || 0,
+          paymentMethod: row.payment_method || undefined,
+          status: row.status || 'pending',
+          createdAt: safeTime,
+          createdAtTimestamp: safeTs,
+          source: row.source || 'qr'
+        };
+      });
     }
   } catch (e) {
     console.warn('Fetch orders error:', e);

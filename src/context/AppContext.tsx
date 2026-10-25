@@ -91,7 +91,7 @@ interface AppContextType {
   updateCartItemQuantity: (index: number, quantity: number) => void;
   removeFromCart: (index: number) => void;
   clearCart: () => void;
-  placeOrder: (customerName: string, paymentMethod?: 'pos' | 'cash' | 'transfer') => Order | null;
+  placeOrder: (customerName: string, paymentMethod?: 'pos' | 'cash' | 'transfer', extraDetails?: { customerPhone?: string; subtotal?: number; vat?: number }) => Order | null;
   callWaiter: (reason: WaiterCall['reason']) => void;
   resolveWaiterCall: (id: string) => void;
   updateOrderStatus: (orderId: string, status: Order['status']) => void;
@@ -438,15 +438,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 const matchesRest = row.restaurant_id === targetRestId || (targetSlug && row.restaurant_id === targetSlug);
                 if (!matchesRest) return;
 
+                const rawDate = row.created_at;
+                const normalizedDate = typeof rawDate === 'string' && rawDate.includes(' ') && !rawDate.includes('T')
+                  ? rawDate.replace(' ', 'T')
+                  : rawDate;
+                const d = normalizedDate ? new Date(normalizedDate) : new Date();
+                const safeTime = !isNaN(d.getTime()) 
+                  ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const safeTs = !isNaN(d.getTime()) ? d.getTime() : Date.now();
+
                 const mapped: Order = {
                   id: row.id,
                   restaurantId: row.restaurant_id,
                   tableNumber: row.table_number,
                   customerName: row.customer_name || 'Guest Diner',
+                  customerPhone: row.customer_phone || undefined,
                   items: row.items || [],
+                  subtotal: row.subtotal ? Number(row.subtotal) : undefined,
+                  vat: row.vat ? Number(row.vat) : undefined,
                   total: Number(row.total) || 0,
+                  paymentMethod: row.payment_method || undefined,
                   status: row.status || 'pending',
-                  createdAt: new Date(row.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  createdAt: safeTime,
+                  createdAtTimestamp: safeTs,
                   source: row.source || 'qr'
                 };
 
@@ -1088,10 +1103,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCart([]);
   };
 
-  const placeOrder = (customerName: string, paymentMethod: 'pos' | 'cash' | 'transfer' = 'pos'): Order | null => {
+  const placeOrder = (
+    customerName: string, 
+    paymentMethod: 'pos' | 'cash' | 'transfer' = 'pos',
+    extraDetails?: { customerPhone?: string; subtotal?: number; vat?: number }
+  ): Order | null => {
     if (cart.length === 0) return null;
 
-    const total = cart.reduce((sum, ci) => sum + ci.foodItem.price * ci.quantity, 0);
+    const calcSubtotal = extraDetails?.subtotal ?? cart.reduce((sum, ci) => sum + ci.foodItem.price * ci.quantity, 0);
+    const calcVat = extraDetails?.vat ?? Math.round(calcSubtotal * 0.075);
+    const total = calcSubtotal + calcVat;
     const orderTable = currentTable || 'Table 1';
 
     let targetRestaurantId = activeRestaurant.id;
@@ -1103,16 +1124,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       targetRestaurantId = restaurants[0].id;
     }
 
-    const uniqueId = `ord-${Date.now().toString().slice(-5)}-${Math.floor(Math.random() * 89 + 10)}`;
+    const nowTs = Date.now();
+    const uniqueId = `ord-${nowTs.toString().slice(-5)}-${Math.floor(Math.random() * 89 + 10)}`;
     const newOrder: Order = {
       id: uniqueId,
       restaurantId: targetRestaurantId,
       tableNumber: orderTable,
       customerName: customerName.trim() || `Diner at ${orderTable}`,
+      customerPhone: extraDetails?.customerPhone?.trim() || undefined,
       items: [...cart],
+      subtotal: calcSubtotal,
+      vat: calcVat,
       total,
+      paymentMethod,
       status: 'pending',
-      createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      createdAt: new Date(nowTs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      createdAtTimestamp: nowTs,
       source: isNfcSource ? 'nfc' : 'qr'
     };
 

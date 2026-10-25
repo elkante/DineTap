@@ -24,10 +24,21 @@ import {
   PhoneCall,
   Upload,
   Pencil,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Volume2,
+  Calendar,
+  FileText,
+  CheckSquare,
+  Square,
+  Phone,
+  RotateCcw,
+  Receipt,
+  Sparkles
 } from 'lucide-react';
-import { FoodItem } from '../../types';
+import { FoodItem, Order } from '../../types';
 import { getDishFallbackImage } from '../Flipbook/FlipPageRenderer';
+import { NotchedBottomBar } from '../Navigation/NotchedBottomBar';
+import { playKitchenChime } from '../../utils/audio';
 
 export const RestaurantDashboard: React.FC = () => {
   const { 
@@ -52,6 +63,136 @@ export const RestaurantDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'kds' | 'menu' | 'tables' | 'settings'>('kds');
   const [copiedSlug, setCopiedSlug] = useState(false);
   const [tableQrMap, setTableQrMap] = useState<Record<string, string>>({});
+
+  // Live Digital Kitchen Clock (updates every second)
+  const [liveClock, setLiveClock] = useState(() => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+  const [clockTick, setClockTick] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setLiveClock(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      setClockTick(t => t + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Buzzer Audio Test Feedback
+  const [testingChime, setTestingChime] = useState(false);
+  const handleTestChime = () => {
+    setTestingChime(true);
+    playKitchenChime();
+    showNotification('🔔 Kitchen buzzer alert tested!');
+    setTimeout(() => setTestingChime(false), 1200);
+  };
+
+  // Interactive Item Scratch-off / Checkmarks (per order item key)
+  const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
+  const toggleItemCheck = (orderId: string, itemIdx: number) => {
+    const key = `${orderId}-${itemIdx}`;
+    setCheckedItems(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Day Shift Management (Start Day / End Day Daily Register)
+  const shiftKey = `tapmenu_shift_${activeRestaurant.id || 'default'}`;
+  const [isDayActive, setIsDayActive] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(shiftKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.isActive ?? true;
+      }
+    } catch {}
+    return true; // Default shift active
+  });
+  const [dayStartTime, setDayStartTime] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem(shiftKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.startedAt || '8:00 AM';
+      }
+    } catch {}
+    return '8:00 AM';
+  });
+  const [isEndDayModalOpen, setIsEndDayModalOpen] = useState(false);
+
+  const handleStartDay = () => {
+    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setIsDayActive(true);
+    setDayStartTime(nowTime);
+    localStorage.setItem(shiftKey, JSON.stringify({ isActive: true, startedAt: nowTime, startedAtTs: Date.now() }));
+    showNotification(`🌅 Day Shift Started at ${nowTime}! Tracking live orders.`);
+  };
+
+  const handleConfirmEndDay = () => {
+    setIsDayActive(false);
+    localStorage.setItem(shiftKey, JSON.stringify({ isActive: false, endedAt: liveClock, startedAt: dayStartTime }));
+    setIsEndDayModalOpen(false);
+    showNotification(`🌙 Day Shift Ended & Reconciled! Z-Report archived.`);
+  };
+
+  // Print Thermal Ticket Slip (ESC/POS Kitchen Slip emulation)
+  const handlePrintTicket = (order: Order) => {
+    const printWindow = window.open('', '_blank', 'width=380,height=600');
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Order Ticket #${order.id}</title>
+        <style>
+          body { font-family: 'Courier New', monospace; font-size: 13px; margin: 10px; color: #000; }
+          .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
+          .title { font-size: 18px; font-weight: bold; }
+          .table { font-size: 22px; font-weight: bold; margin: 4px 0; }
+          .item-row { display: flex; justify-content: space-between; margin: 4px 0; }
+          .notes { font-size: 11px; font-style: italic; margin-left: 10px; }
+          .totals { border-top: 1px dashed #000; margin-top: 8px; padding-top: 6px; }
+          .footer { text-align: center; margin-top: 15px; font-size: 11px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="title">${activeRestaurant.name}</div>
+          <div class="table">${order.tableNumber}</div>
+          <div>Ticket #${order.id}</div>
+          <div>${order.createdAt}</div>
+          <div>Guest: ${order.customerName}</div>
+          ${order.customerPhone ? `<div>Tel: ${order.customerPhone}</div>` : ''}
+          ${order.paymentMethod ? `<div>Pay: ${order.paymentMethod.toUpperCase()}</div>` : ''}
+        </div>
+        <div>
+          ${order.items.map(i => `
+            <div class="item-row">
+              <span><strong>${i.quantity}x</strong> ${i.foodItem.name}</span>
+              <span>${activeRestaurant.design.currencySymbol}${(i.foodItem.price * i.quantity).toLocaleString()}</span>
+            </div>
+            ${i.notes ? `<div class="notes">* Note: ${i.notes}</div>` : ''}
+          `).join('')}
+        </div>
+        <div class="totals">
+          ${order.subtotal ? `<div class="item-row"><span>Subtotal:</span><span>${activeRestaurant.design.currencySymbol}${order.subtotal.toLocaleString()}</span></div>` : ''}
+          ${order.vat ? `<div class="item-row"><span>VAT (7.5%):</span><span>${activeRestaurant.design.currencySymbol}${order.vat.toLocaleString()}</span></div>` : ''}
+          <div class="item-row" style="font-size: 15px; font-weight: bold;">
+            <span>TOTAL:</span>
+            <span>${activeRestaurant.design.currencySymbol}${order.total.toLocaleString()}</span>
+          </div>
+        </div>
+        <div class="footer">
+          *** KITCHEN PRODUCTION TICKET ***
+        </div>
+        <script>
+          window.onload = function() { window.print(); window.close(); };
+        </script>
+      </body>
+      </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
 
   // Category filter & management
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
@@ -118,6 +259,37 @@ export const RestaurantDashboard: React.FC = () => {
     c.restaurantId === activeRestaurant.id ||
     (activeRestaurant.slug && c.restaurantId.toLowerCase() === activeRestaurant.slug.toLowerCase())
   );
+
+  // ── Cumulative Day Shift Accumulator ──────────────────────────────────
+  const totalDayRevenue = restaurantOrders.reduce((sum, o) => sum + o.total, 0);
+  const totalDaySubtotal = restaurantOrders.reduce((sum, o) => sum + (o.subtotal || Math.round(o.total / 1.075)), 0);
+  const totalDayVat = restaurantOrders.reduce((sum, o) => sum + (o.vat || (o.total - Math.round(o.total / 1.075))), 0);
+  const totalDinersCount = restaurantOrders.length;
+  const servedOrdersCount = completedOrders.length;
+
+  const paymentBreakdown = {
+    pos: restaurantOrders.filter(o => o.paymentMethod === 'pos' || !o.paymentMethod).reduce((sum, o) => sum + o.total, 0),
+    cash: restaurantOrders.filter(o => o.paymentMethod === 'cash').reduce((sum, o) => sum + o.total, 0),
+    transfer: restaurantOrders.filter(o => o.paymentMethod === 'transfer').reduce((sum, o) => sum + o.total, 0),
+  };
+
+  // Live ticket elapsed age with color-coded urgency
+  const getTicketAge = (order: Order) => {
+    const ts = order.createdAtTimestamp || Date.now();
+    const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+    const mins = Math.floor(diffSec / 60);
+    const secs = diffSec % 60;
+
+    let urgency: 'fresh' | 'warning' | 'urgent' = 'fresh';
+    if (mins >= 20) {
+      urgency = 'urgent';
+    } else if (mins >= 10) {
+      urgency = 'warning';
+    }
+
+    const timeLabel = mins > 0 ? `${mins}m ago` : `${secs}s ago`;
+    return { mins, timeLabel, urgency };
+  };
 
   // Generate QR code for every table
   useEffect(() => {
@@ -408,6 +580,12 @@ export const RestaurantDashboard: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Live Kitchen Real-time Clock */}
+            <div className="hidden xs:flex items-center gap-1.5 px-2.5 py-1.5 bg-neutral-800/90 border border-neutral-700/80 rounded-xl text-neutral-200 font-mono text-xs font-bold shrink-0" title="Live synced kitchen time">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>{liveClock}</span>
+            </div>
+
             <a
               href={customerMenuUrl}
               target="_blank"
@@ -430,8 +608,8 @@ export const RestaurantDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="max-w-6xl mx-auto px-2 sm:px-4 flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar whitespace-nowrap text-xs pb-2 border-t border-neutral-800/60 pt-2">
+        {/* Navigation Tabs (Hidden on mobile where the Notched Bottom Bar takes over, visible on md+) */}
+        <div className="hidden md:flex max-w-6xl mx-auto px-2 sm:px-4 items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar whitespace-nowrap text-xs pb-2 border-t border-neutral-800/60 pt-2">
           <button
             onClick={() => setActiveTab('kds')}
             className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded-xl font-bold shrink-0 transition-all ${
@@ -490,7 +668,7 @@ export const RestaurantDashboard: React.FC = () => {
       </header>
 
       {/* Main Body */}
-      <main className="max-w-6xl mx-auto w-full p-4 sm:p-6 flex-1">
+      <main className="max-w-6xl mx-auto w-full p-4 sm:p-6 flex-1 pb-28 md:pb-8">
         {/* ========================================================= */}
         {/* TAB 1: KITCHEN DISPLAY SYSTEM (KDS) */}
         {/* ========================================================= */}
@@ -520,6 +698,70 @@ export const RestaurantDashboard: React.FC = () => {
               </div>
             )}
 
+            {/* Kitchen Operations Command Bar: Live Clock, Day Shift Controls & Loud Buzzer */}
+            <div className="bg-white border border-neutral-200 p-3 sm:p-4 rounded-2xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Live Real-time Kitchen Clock */}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 text-white rounded-xl font-mono text-xs font-black shadow-xs">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>{liveClock}</span>
+                </div>
+
+                {/* Day Shift Status Badge */}
+                {isDayActive ? (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs font-semibold">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span>Day Active (from {dayStartTime})</span>
+                    <span className="text-emerald-700 font-mono text-[11px] font-bold">· {totalDinersCount} Diners · {design.currencySymbol}{totalDayRevenue.toLocaleString()}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-100 border border-neutral-200 text-neutral-600 rounded-xl text-xs font-semibold">
+                    <span className="w-2 h-2 rounded-full bg-neutral-400" />
+                    <span>Shift Closed / Reconciled</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Test Loud Kitchen Buzzer */}
+                <button
+                  type="button"
+                  onClick={handleTestChime}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs ${
+                    testingChime 
+                      ? 'bg-amber-500 text-neutral-950 scale-105 ring-2 ring-amber-300' 
+                      : 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300/70'
+                  }`}
+                  title="Test loud kitchen buzzer chime"
+                >
+                  <Volume2 className={`w-3.5 h-3.5 ${testingChime ? 'animate-bounce text-neutral-950' : 'text-amber-800'}`} />
+                  <span>{testingChime ? 'Buzzer Fired!' : 'Test Buzzer'}</span>
+                </button>
+
+                {/* Start Day / End Day Action */}
+                {isDayActive ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsEndDayModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs"
+                    title="End Day Shift: Accumulate all orders, customers, and revenue into Z-Report"
+                  >
+                    <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                    <span>End Day Shift (Z-Report)</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStartDay}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-xs"
+                  >
+                    <Calendar className="w-3.5 h-3.5 text-white" />
+                    <span>Start Day Shift</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
@@ -530,7 +772,7 @@ export const RestaurantDashboard: React.FC = () => {
                   </span>
                 </div>
                 <p className="text-xs text-neutral-500 mt-0.5">
-                  New orders placed by diners at their tables arrive here instantly with an audio chime.
+                  Orders placed by diners at tables arrive with instant sound alert, table details, and customer phone.
                 </p>
               </div>
 
@@ -548,7 +790,7 @@ export const RestaurantDashboard: React.FC = () => {
                 </div>
                 <h3 className="text-base font-bold text-neutral-900">Live Kitchen Tickets Ready</h3>
                 <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto">
-                  When diners scan any of your table QR stand cards, tickets appear here in real time with an audio alert.
+                  When diners scan table QR stands or tap NFC cards, tickets appear here in real time with an audio alert.
                 </p>
                 <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 text-emerald-800 text-xs font-semibold border border-emerald-200">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -557,98 +799,190 @@ export const RestaurantDashboard: React.FC = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {activeOrders.map(order => (
-                  <div
-                    key={order.id}
-                    className="bg-white rounded-2xl border border-neutral-200 p-4 shadow-sm flex flex-col justify-between"
-                  >
-                    <div>
-                      {/* Ticket Header: Prominent Table Number */}
-                      <div className="flex items-start justify-between pb-3 border-b border-neutral-100">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="px-2.5 py-1 bg-neutral-950 text-white font-mono font-black text-sm rounded-lg shadow-xs">
-                              {order.tableNumber}
-                            </span>
-                            <span className="font-mono text-xs text-neutral-400">#{order.id}</span>
+                {activeOrders.map(order => {
+                  const age = getTicketAge(order);
+                  const isUrgent = age.urgency === 'urgent';
+                  const isWarning = age.urgency === 'warning';
+
+                  return (
+                    <div
+                      key={order.id}
+                      className={`bg-white rounded-2xl p-4 shadow-sm flex flex-col justify-between transition-all ${
+                        isUrgent
+                          ? 'border-2 border-red-500 ring-2 ring-red-400/30'
+                          : isWarning
+                          ? 'border-2 border-amber-400 shadow-amber-500/10'
+                          : 'border border-neutral-200'
+                      }`}
+                    >
+                      <div>
+                        {/* Ticket Header: Prominent Table Number, ID, Source & Elapsed Timer */}
+                        <div className="flex items-start justify-between pb-3 border-b border-neutral-100 gap-2">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-1 bg-neutral-950 text-white font-mono font-black text-sm rounded-lg shadow-xs">
+                                {order.tableNumber}
+                              </span>
+                              <span className="font-mono text-xs text-neutral-400">#{order.id}</span>
+                              <span className="text-[10px] text-neutral-400 font-semibold uppercase">
+                                {order.source === 'nfc' ? '📱 NFC' : '📷 QR'}
+                              </span>
+                            </div>
+
+                            {/* Customer Name & Phone */}
+                            <div className="text-xs text-neutral-800 mt-1.5 font-bold flex flex-wrap items-center gap-2">
+                              <span>{order.customerName}</span>
+                              {order.customerPhone && (
+                                <a
+                                  href={`tel:${order.customerPhone}`}
+                                  className="inline-flex items-center gap-1 text-[11px] font-mono text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md hover:bg-amber-100 transition-colors"
+                                  title="Call customer"
+                                >
+                                  <Phone className="w-3 h-3" />
+                                  <span>{order.customerPhone}</span>
+                                </a>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-neutral-400 mt-0.5">
+                              Placed at {order.createdAt}
+                            </div>
                           </div>
-                          <div className="text-xs text-neutral-600 mt-1 font-medium">
-                            {order.customerName} &middot; <span className="text-neutral-400">{order.createdAt}</span>
+
+                          <div className="flex flex-col items-end gap-1.5 shrink-0">
+                            {/* Live Elapsed Age Badge */}
+                            <span className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold flex items-center gap-1 ${
+                              isUrgent 
+                                ? 'bg-red-500 text-white animate-pulse' 
+                                : isWarning 
+                                ? 'bg-amber-100 text-amber-900 border border-amber-300' 
+                                : 'bg-neutral-100 text-neutral-700'
+                            }`}>
+                              <Clock className="w-3 h-3" />
+                              <span>{age.timeLabel}</span>
+                            </span>
+
+                            {/* Print Slip Button */}
+                            <button
+                              type="button"
+                              onClick={() => handlePrintTicket(order)}
+                              className="p-1 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"
+                              title="Print thermal order slip"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
 
-                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
-                          order.status === 'pending'
-                            ? 'bg-amber-100 text-amber-900'
-                            : order.status === 'preparing'
-                            ? 'bg-blue-100 text-blue-900'
-                            : 'bg-emerald-100 text-emerald-900'
-                        }`}>
-                          {order.status}
-                        </span>
+                        {/* Items Checklist (Chef can tap to scratch off prepared dishes) */}
+                        <div className="py-3 space-y-2">
+                          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                            <span>Dishes Ordered</span>
+                            <span>Tap to check off</span>
+                          </div>
+                          {order.items.map((ci, idx) => {
+                            const isChecked = !!checkedItems[`${order.id}-${idx}`];
+                            return (
+                              <div 
+                                key={idx} 
+                                onClick={() => toggleItemCheck(order.id, idx)}
+                                className={`text-xs flex items-start justify-between cursor-pointer p-1.5 rounded-lg transition-all ${
+                                  isChecked ? 'bg-emerald-50/70 text-neutral-400' : 'hover:bg-neutral-50 text-neutral-900'
+                                }`}
+                              >
+                                <div className="flex items-start gap-2 pr-2">
+                                  {isChecked ? (
+                                    <CheckSquare className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                                  ) : (
+                                    <Square className="w-4 h-4 text-neutral-300 shrink-0 mt-0.5" />
+                                  )}
+                                  <div className={isChecked ? 'line-through text-neutral-400' : ''}>
+                                    <span className="font-mono font-bold text-amber-800 mr-1.5">{ci.quantity}x</span>
+                                    <span className="font-bold">{ci.foodItem.name}</span>
+                                    {ci.notes && (
+                                      <div className="text-[11px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded mt-0.5 italic no-underline">
+                                        Note: {ci.notes}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                <span className={`font-mono font-semibold shrink-0 ${isChecked ? 'line-through text-neutral-400' : 'text-neutral-500'}`}>
+                                  {design.currencySymbol}{(ci.foodItem.price * ci.quantity).toLocaleString()}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
 
-                      {/* Items Ordered */}
-                      <div className="py-3 space-y-2">
-                        {order.items.map((ci, idx) => (
-                          <div key={idx} className="text-xs flex items-start justify-between">
-                            <div className="pr-2">
-                              <span className="font-mono font-bold text-amber-800 mr-1.5">{ci.quantity}x</span>
-                              <span className="font-bold text-neutral-900">{ci.foodItem.name}</span>
-                              {ci.notes && (
-                                <div className="text-[11px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded mt-0.5 italic">
-                                  Note: {ci.notes}
-                                </div>
-                              )}
-                            </div>
-                            <span className="font-mono text-neutral-500 font-semibold shrink-0">
-                              {design.currencySymbol}{(ci.foodItem.price * ci.quantity).toLocaleString()}
+                      {/* Footer: Subtotal, VAT, Payment Choice & Status advancement buttons */}
+                      <div className="pt-3 border-t border-neutral-100 space-y-2.5">
+                        {/* Cost & Payment Details */}
+                        <div className="bg-neutral-50 p-2 rounded-xl border border-neutral-100 text-[11px] space-y-1">
+                          <div className="flex items-center justify-between text-neutral-500">
+                            <span>Subtotal</span>
+                            <span className="font-mono">{design.currencySymbol}{(order.subtotal || Math.round(order.total / 1.075)).toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-neutral-500">
+                            <span>VAT (7.5%)</span>
+                            <span className="font-mono text-amber-800 font-bold">
+                              {design.currencySymbol}{(order.vat || (order.total - Math.round(order.total / 1.075))).toLocaleString()}
                             </span>
                           </div>
-                        ))}
+                          <div className="flex items-center justify-between pt-1 border-t border-neutral-200/60 font-bold text-xs text-neutral-900">
+                            <span>Total Due</span>
+                            <span className="font-mono text-sm text-neutral-950 font-black">
+                              {design.currencySymbol}{order.total.toLocaleString()}
+                            </span>
+                          </div>
+
+                          {/* Payment Choice Badge */}
+                          <div className="pt-1 flex items-center justify-between text-[10px]">
+                            <span className="text-neutral-400">Settlement Method:</span>
+                            <span className="px-2 py-0.5 rounded font-bold uppercase bg-amber-100 text-amber-900">
+                              {order.paymentMethod === 'pos' 
+                                ? '💳 Card / POS' 
+                                : order.paymentMethod === 'cash' 
+                                ? '💵 Cash' 
+                                : order.paymentMethod === 'transfer' 
+                                ? '🏦 Transfer' 
+                                : '💳 Card / POS'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Status Advancement Actions */}
+                        <div className="grid grid-cols-3 gap-1 text-xs font-bold">
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'preparing')}
+                            className={`py-1.5 rounded-lg transition-colors ${
+                              order.status === 'preparing'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                            }`}
+                          >
+                            Cooking
+                          </button>
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'ready')}
+                            className={`py-1.5 rounded-lg transition-colors ${
+                              order.status === 'ready'
+                                ? 'bg-amber-500 text-neutral-950'
+                                : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                            }`}
+                          >
+                            Ready
+                          </button>
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'served')}
+                            className="py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+                          >
+                            Served
+                          </button>
+                        </div>
                       </div>
                     </div>
-
-                    {/* Footer: Payment info & Status advancement buttons */}
-                    <div className="pt-3 border-t border-neutral-100 space-y-2.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-neutral-500">Total</span>
-                        <span className="font-mono font-bold text-sm text-neutral-900">
-                          {design.currencySymbol}{order.total.toLocaleString()}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-1 text-xs font-bold">
-                        <button
-                          onClick={() => updateOrderStatus(order.id, 'preparing')}
-                          className={`py-1.5 rounded-lg transition-colors ${
-                            order.status === 'preparing'
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-                          }`}
-                        >
-                          Cooking
-                        </button>
-                        <button
-                          onClick={() => updateOrderStatus(order.id, 'ready')}
-                          className={`py-1.5 rounded-lg transition-colors ${
-                            order.status === 'ready'
-                              ? 'bg-amber-500 text-neutral-950'
-                              : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-                          }`}
-                        >
-                          Ready
-                        </button>
-                        <button
-                          onClick={() => updateOrderStatus(order.id, 'served')}
-                          className="py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
-                        >
-                          Served
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -1497,6 +1831,113 @@ export const RestaurantDashboard: React.FC = () => {
           </div>
         </div>
       )}
+      {/* ========================================================= */}
+      {/* MODAL: END DAY SHIFT RECONCILIATION & Z-REPORT */}
+      {/* ========================================================= */}
+      {isEndDayModalOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-neutral-200 text-xs animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-500 text-neutral-950 flex items-center justify-center font-bold">
+                  <Receipt className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold text-neutral-900">End Day Shift · Z-Report</h3>
+                  <p className="text-[11px] text-neutral-500">{activeRestaurant.name} · Cumulative Reconciliation</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsEndDayModalOpen(false)}
+                className="text-neutral-400 hover:text-neutral-800 p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Shift Summary Cards */}
+            <div className="my-4 space-y-3">
+              <div className="p-3 bg-neutral-900 text-white rounded-2xl flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-neutral-400 block tracking-wider">Total Accumulated Sales Today</span>
+                  <span className="font-mono text-2xl font-black text-amber-400">{design.currencySymbol}{totalDayRevenue.toLocaleString()}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold text-neutral-400 block">Shift Duration</span>
+                  <span className="font-mono text-xs text-neutral-200">{dayStartTime} — {liveClock}</span>
+                </div>
+              </div>
+
+              {/* Breakdown Grid */}
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="p-2.5 bg-neutral-50 border border-neutral-200 rounded-xl">
+                  <span className="text-[10px] text-neutral-400 font-bold block uppercase">Total Diners</span>
+                  <span className="font-mono text-base font-black text-neutral-900">{totalDinersCount}</span>
+                </div>
+                <div className="p-2.5 bg-neutral-50 border border-neutral-200 rounded-xl">
+                  <span className="text-[10px] text-neutral-400 font-bold block uppercase">Orders Served</span>
+                  <span className="font-mono text-base font-black text-emerald-700">{servedOrdersCount} / {restaurantOrders.length}</span>
+                </div>
+                <div className="p-2.5 bg-neutral-50 border border-neutral-200 rounded-xl">
+                  <span className="text-[10px] text-neutral-400 font-bold block uppercase">VAT Collected</span>
+                  <span className="font-mono text-base font-black text-amber-800">{design.currencySymbol}{totalDayVat.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* Payment Methods Breakdown */}
+              <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-xl space-y-2">
+                <span className="text-[11px] font-bold text-neutral-800 block">Settlement Breakdown</span>
+                <div className="flex items-center justify-between text-xs text-neutral-600">
+                  <span className="flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5 text-blue-600" /> POS / Card at Table:</span>
+                  <span className="font-mono font-bold text-neutral-900">{design.currencySymbol}{paymentBreakdown.pos.toLocaleString()}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-neutral-600">
+                  <span className="flex items-center gap-1.5"><Coins className="w-3.5 h-3.5 text-amber-600" /> Cash to Waiters:</span>
+                  <span className="font-mono font-bold text-neutral-900">{design.currencySymbol}{paymentBreakdown.cash.toLocaleString()}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-neutral-600">
+                  <span className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-emerald-600" /> Direct Bank Transfer:</span>
+                  <span className="font-mono font-bold text-neutral-900">{design.currencySymbol}{paymentBreakdown.transfer.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-3 border-t border-neutral-100">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="w-full sm:w-auto px-4 py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Printer className="w-3.5 h-3.5 text-neutral-600" />
+                <span>Print Z-Report Slip</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmEndDay}
+                className="w-full sm:w-auto px-5 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-md"
+              >
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Close Day & Archive</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Notched Bottom Navigation for Mobile (Replacing the top tab bar) */}
+      <NotchedBottomBar
+        variant="kitchen_dashboard"
+        activeTab={activeTab}
+        onTabChange={(tab) => setActiveTab(tab)}
+        activeOrdersCount={activeOrders.length}
+        waiterCallsCount={restaurantCalls.length}
+        totalDishesCount={allDishes.length}
+        totalTablesCount={activeRestaurant.tables.length}
+        isTestingChime={testingChime}
+        onTestChime={handleTestChime}
+      />
     </div>
   );
 };

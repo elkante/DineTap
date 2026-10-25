@@ -125,11 +125,35 @@ export interface Order {
   restaurantId: string;
   tableNumber: string;
   customerName: string;
+  customerPhone?: string;
   items: CartItem[];
+  subtotal?: number;
+  vat?: number;
   total: number;
+  paymentMethod?: 'pos' | 'cash' | 'transfer';
   status: 'pending' | 'preparing' | 'ready' | 'served';
   createdAt: string;
+  createdAtTimestamp?: number;
   source: 'nfc' | 'qr' | 'web';
+}
+
+export interface DailyShift {
+  id: string;
+  restaurantId: string;
+  startedAt: string;
+  startedAtTimestamp: number;
+  endedAt?: string;
+  endedAtTimestamp?: number;
+  isActive: boolean;
+  totalOrders: number;
+  totalRevenue: number;
+  totalVat: number;
+  totalCustomers: number;
+  breakdown: {
+    pos: number;
+    cash: number;
+    transfer: number;
+  };
 }
 
 export interface WaiterCall {

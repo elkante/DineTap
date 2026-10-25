@@ -15,7 +15,10 @@ import {
   RotateCcw,
   Sparkles,
   ExternalLink,
-  Lock
+  Lock,
+  Utensils,
+  QrCode,
+  Settings
 } from 'lucide-react';
 
 export interface KitchenNotchedBarProps {
@@ -32,6 +35,18 @@ export interface KitchenNotchedBarProps {
   currentFilter?: 'all' | 'active' | 'served' | 'calls';
 }
 
+export interface KitchenDashboardNotchedBarProps {
+  variant: 'kitchen_dashboard';
+  activeTab: 'kds' | 'menu' | 'tables' | 'settings';
+  onTabChange: (tab: 'kds' | 'menu' | 'tables' | 'settings') => void;
+  activeOrdersCount: number;
+  waiterCallsCount: number;
+  totalDishesCount: number;
+  totalTablesCount: number;
+  isTestingChime?: boolean;
+  onTestChime: () => void;
+}
+
 export interface SuperAdminNotchedBarProps {
   variant: 'super_admin';
   activeTab: 'restaurants' | 'plans' | 'settings' | 'hardware';
@@ -43,7 +58,7 @@ export interface SuperAdminNotchedBarProps {
   onExitHQ?: () => void;
 }
 
-export type NotchedBottomBarProps = KitchenNotchedBarProps | SuperAdminNotchedBarProps;
+export type NotchedBottomBarProps = KitchenNotchedBarProps | KitchenDashboardNotchedBarProps | SuperAdminNotchedBarProps;
 
 export const NotchedBottomBar: React.FC<NotchedBottomBarProps> = (props) => {
   const [pressedFeedback, setPressedFeedback] = useState(false);
@@ -52,7 +67,7 @@ export const NotchedBottomBar: React.FC<NotchedBottomBarProps> = (props) => {
     setPressedFeedback(true);
     setTimeout(() => setPressedFeedback(false), 300);
 
-    if (props.variant === 'kitchen') {
+    if (props.variant === 'kitchen' || props.variant === 'kitchen_dashboard') {
       props.onTestChime();
     } else {
       props.onOpenOnboardModal();
@@ -116,7 +131,7 @@ export const NotchedBottomBar: React.FC<NotchedBottomBarProps> = (props) => {
           <button
             type="button"
             onClick={handleCenterAction}
-            aria-label={props.variant === 'kitchen' ? 'Test Kitchen Buzzer Alert & Badge' : 'Onboard New Restaurant Tenant'}
+            aria-label={props.variant === 'super_admin' ? 'Onboard New Restaurant Tenant' : 'Test Kitchen Buzzer Alert & Badge'}
             className={`
               w-14 h-14 rounded-full flex flex-col items-center justify-center 
               bg-gradient-to-tr from-amber-600 via-amber-500 to-yellow-400 text-stone-950 font-bold 
@@ -124,21 +139,21 @@ export const NotchedBottomBar: React.FC<NotchedBottomBarProps> = (props) => {
               border-2 border-yellow-200/90
               transition-all duration-200 ease-out cursor-pointer
               ${pressedFeedback ? 'scale-90 ring-4 ring-amber-400/60' : 'hover:scale-105 active:scale-95'}
-              ${props.variant === 'kitchen' && props.isTestingChime ? 'animate-pulse ring-4 ring-yellow-300' : ''}
+              ${(props.variant === 'kitchen' || props.variant === 'kitchen_dashboard') && props.isTestingChime ? 'animate-pulse ring-4 ring-yellow-300' : ''}
             `}
           >
-            {props.variant === 'kitchen' ? (
-              <>
-                <Volume2 className={`w-6 h-6 text-stone-950 ${props.isTestingChime ? 'animate-bounce' : ''}`} />
-                <span className="text-[8px] font-black uppercase tracking-tighter -mt-0.5 text-stone-950">
-                  {props.isTestingChime ? 'Alert!' : 'Buzzer'}
-                </span>
-              </>
-            ) : (
+            {props.variant === 'super_admin' ? (
               <>
                 <Plus className="w-6 h-6 text-stone-950 stroke-[2.75]" />
                 <span className="text-[8px] font-black uppercase tracking-tighter -mt-0.5 text-stone-950">
                   Onboard
+                </span>
+              </>
+            ) : (
+              <>
+                <Volume2 className={`w-6 h-6 text-stone-950 ${props.isTestingChime ? 'animate-bounce' : ''}`} />
+                <span className="text-[8px] font-black uppercase tracking-tighter -mt-0.5 text-stone-950">
+                  {props.isTestingChime ? 'Alert!' : 'Buzzer'}
                 </span>
               </>
             )}
@@ -152,7 +167,51 @@ export const NotchedBottomBar: React.FC<NotchedBottomBarProps> = (props) => {
             LEFT SECTION TABS (2 items)
            ========================================================================= */}
         <div className="flex-1 flex items-center justify-around pr-8 z-10 pl-2">
-          {props.variant === 'kitchen' ? (
+          {props.variant === 'kitchen_dashboard' ? (
+            <>
+              {/* Dashboard Tab 1: Kitchen Orders */}
+              <button
+                type="button"
+                onClick={() => props.onTabChange('kds')}
+                className={`flex flex-col items-center justify-center min-w-[54px] py-1.5 transition-colors relative ${
+                  props.activeTab === 'kds'
+                    ? 'text-amber-400 font-bold'
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+              >
+                <div className="relative">
+                  <ChefHat className="w-5 h-5" />
+                  {props.activeOrdersCount > 0 && (
+                    <span className="absolute -top-1.5 -right-2.5 px-1.5 py-0.2 bg-amber-500 text-stone-950 text-[10px] font-mono font-black rounded-full border border-stone-900 shadow-xs">
+                      {props.activeOrdersCount}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] tracking-tight mt-0.5">Kitchen</span>
+              </button>
+
+              {/* Dashboard Tab 2: Menu Dishes */}
+              <button
+                type="button"
+                onClick={() => props.onTabChange('menu')}
+                className={`flex flex-col items-center justify-center min-w-[54px] py-1.5 transition-colors relative ${
+                  props.activeTab === 'menu'
+                    ? 'text-amber-400 font-bold'
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+              >
+                <div className="relative">
+                  <Utensils className="w-5 h-5" />
+                  {props.totalDishesCount > 0 && (
+                    <span className="absolute -top-1.5 -right-2 px-1.5 py-0.2 bg-stone-700 text-amber-300 text-[10px] font-mono font-bold rounded-full border border-stone-900 shadow-xs">
+                      {props.totalDishesCount}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] tracking-tight mt-0.5">Dishes</span>
+              </button>
+            </>
+          ) : props.variant === 'kitchen' ? (
             <>
               {/* Tab 1: Active Tickets */}
               <button
@@ -245,7 +304,45 @@ export const NotchedBottomBar: React.FC<NotchedBottomBarProps> = (props) => {
             RIGHT SECTION TABS (2 items)
            ========================================================================= */}
         <div className="flex-1 flex items-center justify-around pl-8 z-10 pr-2">
-          {props.variant === 'kitchen' ? (
+          {props.variant === 'kitchen_dashboard' ? (
+            <>
+              {/* Dashboard Tab 3: Tables QR Codes */}
+              <button
+                type="button"
+                onClick={() => props.onTabChange('tables')}
+                className={`flex flex-col items-center justify-center min-w-[54px] py-1.5 transition-colors relative ${
+                  props.activeTab === 'tables'
+                    ? 'text-amber-400 font-bold'
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+              >
+                <div className="relative">
+                  <QrCode className="w-5 h-5" />
+                  {props.totalTablesCount > 0 && (
+                    <span className="absolute -top-1.5 -right-2 px-1.5 py-0.2 bg-stone-700 text-amber-300 text-[10px] font-mono font-bold rounded-full border border-stone-900 shadow-xs">
+                      {props.totalTablesCount}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] tracking-tight mt-0.5">Tables</span>
+              </button>
+
+              {/* Dashboard Tab 4: Settings & Day Shift */}
+              <button
+                type="button"
+                onClick={() => props.onTabChange('settings')}
+                className={`flex flex-col items-center justify-center min-w-[54px] py-1.5 transition-colors relative ${
+                  props.activeTab === 'settings'
+                    ? 'text-amber-400 font-bold'
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+                title="Settings & Shift Closeout"
+              >
+                <Settings className="w-5 h-5" />
+                <span className="text-[10px] tracking-tight mt-0.5">Settings</span>
+              </button>
+            </>
+          ) : props.variant === 'kitchen' ? (
             <>
               {/* Tab 3: Completed / Served Orders */}
               <button

@@ -10,6 +10,7 @@ import { LandingPage } from './components/Landing/LandingPage';
 import { AuthPortal } from './components/Auth/AuthPortal';
 import { PricingPage } from './components/Pricing/PricingPage';
 import { SuperAdminView } from './components/SuperAdmin/SuperAdminView';
+import { SplashScreen } from './components/SplashScreen';
 import { FoodItem } from './types';
 import { Sparkles, Plus, Minus, X, AlertCircle, Store, ArrowRight } from 'lucide-react';
 
@@ -288,6 +289,7 @@ const MainContent: React.FC = () => {
 export default function App() {
   return (
     <AppProvider>
+      <SplashScreen />
       <MainContent />
     </AppProvider>
   );

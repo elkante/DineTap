@@ -62,7 +62,7 @@ export function getNotificationPermissionStatus(): NotificationPermission {
 }
 
 /**
- * Requests browser permission for notifications.
+ * Requests browser permission for notifications (Safari and Chromium compatible).
  */
 export async function requestKitchenNotificationPermission(): Promise<boolean> {
   if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -70,8 +70,17 @@ export async function requestKitchenNotificationPermission(): Promise<boolean> {
   }
 
   try {
-    const permission = await Notification.requestPermission();
-    return permission === 'granted';
+    const res = Notification.requestPermission();
+    if (res && typeof (res as any).then === 'function') {
+      const permission = await res;
+      return permission === 'granted';
+    }
+    // Safari legacy callback
+    return new Promise((resolve) => {
+      Notification.requestPermission((permission) => {
+        resolve(permission === 'granted');
+      });
+    });
   } catch (err) {
     console.warn('Notification permission request error:', err);
     return false;
@@ -120,12 +129,18 @@ export async function notifyKitchenNewTicket(params: KitchenTicketNotification):
         }
       }
 
-      // Fallback to window Notification constructor
-      new Notification(params.title, {
-        body: params.body,
-        icon: '/pwa-192x192.png',
-        tag: 'kitchen-active-ticket',
-      });
+      // Fallback to window Notification constructor (safely guarded against Safari TypeError)
+      try {
+        if (typeof Notification === 'function') {
+          new Notification(params.title, {
+            body: params.body,
+            icon: '/pwa-192x192.png',
+            tag: 'kitchen-active-ticket',
+          });
+        }
+      } catch (err) {
+        console.debug('Direct Notification constructor not supported on this browser (Safari/iOS):', err);
+      }
     } catch (err) {
       console.debug('Failed to show system notification:', err);
     }
