@@ -325,9 +325,9 @@ export const KitchenArchiveView: React.FC<KitchenArchiveViewProps> = ({
                       <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 text-amber-900">
                         {order.tableNumber}
                       </span>
-                      {order.orderType === 'takeaway' && (
+                      {(order.orderType === 'takeaway' || order.orderType === 'both') && (
                         <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-rose-100 text-rose-900">
-                          🥡 TAKEOUT
+                          {order.orderType === 'both' ? '🍽️🥡 BOTH' : '🥡 TAKEOUT'}
                         </span>
                       )}
                       <span className="text-neutral-400 text-[11px]">{order.createdAt}</span>

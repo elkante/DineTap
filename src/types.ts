@@ -147,7 +147,7 @@ export interface Order {
   createdAtTimestamp?: number;
   source: 'nfc' | 'qr' | 'web';
   /** Takeout packaging options */
-  orderType?: 'dine_in' | 'takeaway';
+  orderType?: 'dine_in' | 'takeaway' | 'both';
   packagingFee?: number;
   packCount?: number;
 }

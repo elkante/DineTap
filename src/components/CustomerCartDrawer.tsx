@@ -9,10 +9,11 @@ import {
   CheckCircle2, 
   Nfc, 
   ArrowRight,
-  Sparkles,
   Plus,
   Minus,
-  Building2
+  Building2,
+  UtensilsCrossed,
+  Package
 } from 'lucide-react';
 
 export const CustomerCartDrawer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
@@ -29,7 +30,9 @@ export const CustomerCartDrawer: React.FC<{ isOpen: boolean; onClose: () => void
 
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [orderType, setOrderType] = useState<'dine_in' | 'takeaway'>('dine_in');
+  // 'dine_in' | 'takeaway' | 'both'
+  const [wantsDineIn, setWantsDineIn] = useState(true);
+  const [wantsTakeaway, setWantsTakeaway] = useState(false);
   const [packCount, setPackCount] = useState(1);
   const [paymentChoice, setPaymentChoice] = useState<'pos' | 'cash' | 'transfer'>('pos');
   const [orderPlacedSuccess, setOrderPlacedSuccess] = useState<string | null>(null);
@@ -40,14 +43,36 @@ export const CustomerCartDrawer: React.FC<{ isOpen: boolean; onClose: () => void
   const subtotal = cart.reduce((sum, ci) => sum + ci.foodItem.price * ci.quantity, 0);
   const totalItemCount = cart.reduce((sum, ci) => sum + ci.quantity, 0);
   const packUnitPrice = activeRestaurant.packagingFeePerPack ?? 500;
-  const packagingFee = orderType === 'takeaway' ? packCount * packUnitPrice : 0;
+
+  // Derive the effective orderType
+  const orderType = wantsDineIn && wantsTakeaway ? 'both' : wantsTakeaway ? 'takeaway' : 'dine_in';
+  const hasTakeaway = orderType === 'takeaway' || orderType === 'both';
+
+  const packagingFee = hasTakeaway ? packCount * packUnitPrice : 0;
   const vat = Math.round((subtotal + packagingFee) * 0.075);
   const total = subtotal + packagingFee + vat;
 
+  // Header label based on mode
+  const headerLabel =
+    orderType === 'both'
+      ? '🍽️🥡 Dine-in + Takeout'
+      : orderType === 'takeaway'
+      ? '🥡 Takeout Order'
+      : '🍽️ Dine-in Order';
+
   const handleCheckout = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Determine default name
+    const defaultName =
+      orderType === 'takeaway'
+        ? `Takeout (${currentTable || 'Walk-in'})`
+        : orderType === 'both'
+        ? `Dine-in + Takeout – ${currentTable || 'Table'}`
+        : `Diner at ${currentTable || 'Table 1'}`;
+
     const newOrder = placeOrder(
-      customerName || (orderType === 'takeaway' ? 'Takeout Customer' : 'Diner at ' + (currentTable || 'Table 01')), 
+      customerName || defaultName,
       paymentChoice,
       {
         customerPhone: customerPhone.trim() || undefined,
@@ -55,7 +80,7 @@ export const CustomerCartDrawer: React.FC<{ isOpen: boolean; onClose: () => void
         vat,
         orderType,
         packagingFee: packagingFee > 0 ? packagingFee : undefined,
-        packCount: orderType === 'takeaway' ? packCount : undefined
+        packCount: hasTakeaway ? packCount : undefined
       }
     );
     if (newOrder) {
@@ -73,16 +98,17 @@ export const CustomerCartDrawer: React.FC<{ isOpen: boolean; onClose: () => void
       <div className="bg-white w-full max-w-md h-full flex flex-col justify-between shadow-2xl relative animate-in slide-in-from-right duration-200">
         {/* Header */}
         <div className="p-4 border-b border-neutral-200 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ShoppingBag className="w-5 h-5 text-amber-600" />
-            <h2 className="text-base font-bold text-neutral-900">Your Table Order</h2>
+          <div className="flex items-center gap-2 min-w-0">
+            <ShoppingBag className="w-5 h-5 text-amber-600 shrink-0" />
+            <h2 className="text-base font-bold text-neutral-900 truncate">{headerLabel}</h2>
+            {/* Always show table badge */}
             {currentTable && (
-              <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-amber-100 text-amber-900">
+              <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-amber-100 text-amber-900 shrink-0">
                 {currentTable}
               </span>
             )}
           </div>
-          <button onClick={onClose} className="p-1 text-neutral-400 hover:text-neutral-900 rounded-lg">
+          <button onClick={onClose} className="p-1 text-neutral-400 hover:text-neutral-900 rounded-lg shrink-0">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -99,6 +125,7 @@ export const CustomerCartDrawer: React.FC<{ isOpen: boolean; onClose: () => void
             </p>
             <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 w-full text-xs text-neutral-600 mb-6 font-mono space-y-1">
               <div>Table: {currentTable || 'Table 01'}</div>
+              <div>Type: {headerLabel}</div>
               <div>Source: {isNfcSource ? 'Digital Card Tap' : 'QR Scan'}</div>
               <div>
                 Payment:{' '}
@@ -181,38 +208,69 @@ export const CustomerCartDrawer: React.FC<{ isOpen: boolean; onClose: () => void
             {/* Checkout Form */}
             {cart.length > 0 && (
               <form onSubmit={handleCheckout} className="p-4 border-t border-neutral-200 bg-neutral-50/50 space-y-3 text-xs">
-                {/* Dining Mode Selector: Dine-in vs Takeaway */}
-                <div className="bg-white p-1 rounded-xl border border-neutral-200 flex gap-1 shadow-xs">
-                  <button
-                    type="button"
-                    onClick={() => setOrderType('dine_in')}
-                    className={`flex-1 py-2 px-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-                      orderType === 'dine_in'
-                        ? 'bg-neutral-900 text-white shadow-xs'
-                        : 'text-neutral-600 hover:text-neutral-900'
-                    }`}
-                  >
-                    <span>🍽️ Dine-in</span>
-                    {currentTable && <span className="text-[10px] opacity-75">({currentTable})</span>}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOrderType('takeaway');
-                      if (packCount < 1) setPackCount(Math.max(1, totalItemCount));
-                    }}
-                    className={`flex-1 py-2 px-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-                      orderType === 'takeaway'
-                        ? 'bg-amber-500 text-neutral-950 shadow-xs'
-                        : 'text-neutral-600 hover:text-neutral-900'
-                    }`}
-                  >
-                    <span>🥡 Takeout Pack</span>
-                  </button>
+
+                {/* ── Dining Mode: independent toggles so both can be selected ── */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">
+                    How are you having this?
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* Dine-in toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // At least one must stay on
+                        if (wantsDineIn && !wantsTakeaway) return;
+                        setWantsDineIn(!wantsDineIn);
+                      }}
+                      className={`flex items-center gap-2 p-2.5 rounded-xl border-2 font-bold text-xs transition-all ${
+                        wantsDineIn
+                          ? 'border-neutral-900 bg-neutral-900 text-white'
+                          : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400'
+                      }`}
+                    >
+                      <UtensilsCrossed className={`w-4 h-4 shrink-0 ${wantsDineIn ? 'text-amber-400' : 'text-neutral-400'}`} />
+                      <div className="text-left">
+                        <div>🍽️ Dine-in</div>
+                        {currentTable && <div className="text-[10px] opacity-70">{currentTable}</div>}
+                      </div>
+                    </button>
+
+                    {/* Takeaway toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // At least one must stay on
+                        if (wantsTakeaway && !wantsDineIn) return;
+                        const next = !wantsTakeaway;
+                        setWantsTakeaway(next);
+                        if (next && packCount < 1) setPackCount(Math.max(1, totalItemCount));
+                      }}
+                      className={`flex items-center gap-2 p-2.5 rounded-xl border-2 font-bold text-xs transition-all ${
+                        wantsTakeaway
+                          ? 'border-amber-500 bg-amber-500 text-neutral-950'
+                          : 'border-neutral-200 bg-white text-neutral-600 hover:border-amber-300'
+                      }`}
+                    >
+                      <Package className={`w-4 h-4 shrink-0 ${wantsTakeaway ? 'text-neutral-900' : 'text-neutral-400'}`} />
+                      <div className="text-left">
+                        <div>🥡 Takeout</div>
+                        <div className="text-[10px] opacity-70">Pack to go</div>
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Combined indicator */}
+                  {wantsDineIn && wantsTakeaway && (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-300 rounded-lg text-[11px] font-semibold text-amber-900 animate-in fade-in">
+                      <span>✅</span>
+                      <span>Eating here AND taking some food home – kitchen will prepare both!</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Takeaway Packaging Options */}
-                {orderType === 'takeaway' && (
+                {hasTakeaway && (
                   <div className="p-2.5 bg-amber-50/80 border border-amber-200 rounded-xl space-y-2 animate-in fade-in">
                     <div className="flex items-center justify-between">
                       <div>
@@ -253,7 +311,7 @@ export const CustomerCartDrawer: React.FC<{ isOpen: boolean; onClose: () => void
                     <span>Dishes Subtotal</span>
                     <span className="font-mono">{design.currencySymbol}{subtotal.toLocaleString()}</span>
                   </div>
-                  {orderType === 'takeaway' && packagingFee > 0 && (
+                  {hasTakeaway && packagingFee > 0 && (
                     <div className="flex justify-between text-amber-800 font-medium">
                       <span>Takeout Packaging ({packCount}x @ {design.currencySymbol}{packUnitPrice.toLocaleString()})</span>
                       <span className="font-mono">+{design.currencySymbol}{packagingFee.toLocaleString()}</span>

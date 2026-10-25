@@ -218,13 +218,13 @@ export const RestaurantDashboard: React.FC = () => {
       <body>
         <div class="header">
           <div class="title">${activeRestaurant.name}</div>
-          <div class="table">${order.orderType === 'takeaway' ? '🥡 TAKEOUT PACK' : order.tableNumber}</div>
+          <div class="table">${order.orderType === 'takeaway' ? '🥡 TAKEOUT PACK' : order.orderType === 'both' ? `🍽️🥡 DINE-IN + TAKEOUT – ${order.tableNumber}` : order.tableNumber}</div>
           <div>Ticket #${order.id}</div>
           <div>${order.createdAt}</div>
           <div>Guest: ${order.customerName}</div>
           ${order.customerPhone ? `<div>Tel: ${order.customerPhone}</div>` : ''}
           ${order.paymentMethod ? `<div>Pay: ${order.paymentMethod.toUpperCase()}</div>` : ''}
-          ${order.orderType === 'takeaway' ? `<div style="font-weight:bold; margin-top:4px;">* TAKEOUT PACKAGING (${order.packCount || 1}x)</div>` : ''}
+          ${order.orderType === 'takeaway' || order.orderType === 'both' ? `<div style="font-weight:bold; margin-top:4px;">* TAKEOUT PACKAGING (${order.packCount || 1}x)</div>` : ''}
         </div>
         <div>
           ${order.items.map(i => `
@@ -1108,11 +1108,11 @@ export const RestaurantDashboard: React.FC = () => {
                               </span>
                             </div>
 
-                            {/* Takeout Packaging Badge */}
-                            {order.orderType === 'takeaway' && (
+                            {/* Takeout / Both Packaging Badge */}
+                            {(order.orderType === 'takeaway' || order.orderType === 'both') && (
                               <div className="mt-1.5 flex items-center gap-1.5 px-2 py-0.5 bg-rose-100 text-rose-900 border border-rose-300 rounded-lg text-[11px] font-black tracking-wide w-fit animate-pulse">
-                                <span>🥡 TAKEAWAY PACK</span>
-                                {order.packCount && <span>({order.packCount}x)</span>}
+                                <span>{order.orderType === 'both' ? '🍽️🥡 DINE-IN + TAKEOUT' : '🥡 TAKEAWAY PACK'}</span>
+                                {order.packCount && <span>({order.packCount}x packs)</span>}
                                 {order.packagingFee && <span className="opacity-75">· +₦{order.packagingFee.toLocaleString()}</span>}
                               </div>
                             )}

@@ -102,7 +102,7 @@ interface AppContextType {
       customerPhone?: string; 
       subtotal?: number; 
       vat?: number;
-      orderType?: 'dine_in' | 'takeaway';
+      orderType?: 'dine_in' | 'takeaway' | 'both';
       packagingFee?: number;
       packCount?: number;
     }
@@ -1304,7 +1304,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       customerPhone?: string; 
       subtotal?: number; 
       vat?: number;
-      orderType?: 'dine_in' | 'takeaway';
+      orderType?: 'dine_in' | 'takeaway' | 'both';
       packagingFee?: number;
       packCount?: number;
     }
@@ -1316,7 +1316,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const calcVat = extraDetails?.vat ?? Math.round((calcSubtotal + packagingFee) * 0.075);
     const total = calcSubtotal + packagingFee + calcVat;
     const orderType = extraDetails?.orderType || 'dine_in';
-    const orderTable = orderType === 'takeaway' ? 'Takeout' : (currentTable || 'Table 1');
+    // For 'both' and 'dine_in', always keep the table; for pure takeaway show "Takeout (TableNum)"
+    const orderTable = orderType === 'takeaway'
+      ? `Takeout (${currentTable || 'Walk-in'})`
+      : (currentTable || 'Table 1');
 
     let targetRestaurantId = activeRestaurant.id;
     if (!targetRestaurantId && requestedSlug) {
@@ -1335,7 +1338,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: uniqueId,
       restaurantId: targetRestaurantId,
       tableNumber: orderTable,
-      customerName: customerName.trim() || (orderType === 'takeaway' ? 'Takeout Customer' : `Diner at ${orderTable}`),
+      customerName: customerName.trim() || (orderType === 'takeaway' ? `Takeout Customer (${currentTable || 'Walk-in'})` : `Diner at ${orderTable}`),
       customerPhone: extraDetails?.customerPhone?.trim() || undefined,
       items: [...cart],
       subtotal: calcSubtotal,
