@@ -1424,3 +1424,131 @@ export async function deleteRestaurantFromSupabase(restaurantId: string): Promis
   }
 }
 
+
+
+/**
+ * Fetch shifts history from Supabase
+ */
+export async function fetchShiftsFromSupabase(restaurantId: string): Promise<any[]> {
+  const localKey = `tapmenu_shift_history_${restaurantId}`;
+  let localShifts: any[] = [];
+  try {
+    const raw = localStorage.getItem(localKey);
+    if (raw) localShifts = JSON.parse(raw);
+  } catch {}
+
+  if (!supabase || !restaurantId) return localShifts;
+
+  try {
+    const resolvedId = await resolveRestaurantDbId(restaurantId);
+    const { data, error } = await supabase
+      .from('kitchen_shifts')
+      .select('*')
+      .or(`restaurant_id.eq.${resolvedId},restaurant_id.eq.${restaurantId}`)
+      .order('created_at', { ascending: false });
+
+    if (!error && data && Array.isArray(data)) {
+      const mapped = data.map((row: any) => ({
+        shiftId: row.shift_id || row.id,
+        startedAt: row.started_at,
+        startedAtTs: Number(row.started_at_ts) || Date.now() - 3600000,
+        endedAt: row.ended_at,
+        endedAtTs: Number(row.ended_at_ts) || Date.now(),
+        date: row.date,
+        totalRevenue: Number(row.total_revenue) || 0,
+        totalOrders: Number(row.total_orders) || 0,
+        servedOrders: Number(row.served_orders) || 0,
+        vat: Number(row.vat) || 0,
+        payments: row.payments || {}
+      }));
+      localStorage.setItem(localKey, JSON.stringify(mapped));
+      return mapped;
+    }
+  } catch (err) {
+    console.warn('fetchShiftsFromSupabase notice:', err);
+  }
+
+  return localShifts;
+}
+
+/**
+ * Persist shift reconciliation report to Supabase
+ */
+export async function saveShiftToSupabase(restaurantId: string, shift: any): Promise<boolean> {
+  const localKey = `tapmenu_shift_history_${restaurantId}`;
+  try {
+    const existing = JSON.parse(localStorage.getItem(localKey) || '[]');
+    const filtered = existing.filter((s: any) => s.shiftId !== shift.shiftId);
+    filtered.unshift(shift);
+    localStorage.setItem(localKey, JSON.stringify(filtered.slice(0, 90)));
+  } catch {}
+
+  if (!supabase || !restaurantId) return false;
+
+  try {
+    const resolvedId = await resolveRestaurantDbId(restaurantId);
+    const payload = {
+      id: shift.shiftId || `sh-${Date.now()}`,
+      restaurant_id: resolvedId || restaurantId,
+      shift_id: shift.shiftId || `sh-${Date.now()}`,
+      started_at: shift.startedAt || '8:00 AM',
+      started_at_ts: shift.startedAtTs || Date.now(),
+      ended_at: shift.endedAt || '',
+      ended_at_ts: shift.endedAtTs || Date.now(),
+      date: shift.date || new Date().toISOString().split('T')[0],
+      total_revenue: Number(shift.totalRevenue) || 0,
+      total_orders: Number(shift.totalOrders) || 0,
+      served_orders: Number(shift.servedOrders) || 0,
+      vat: Number(shift.vat) || 0,
+      payments: shift.payments || {}
+    };
+
+    const { error } = await supabase.from('kitchen_shifts').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      console.warn('Supabase save kitchen_shifts notice:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('saveShiftToSupabase exception:', err);
+    return false;
+  }
+}
+
+/**
+ * Bulk sync all local dishes up to Supabase so mobile and PC match instantly
+ */
+export async function syncAllDishesToSupabase(
+  restaurantIdOrSlug: string,
+  dishes: Array<{ item: FoodItem; category: string }>
+): Promise<number> {
+  if (!supabase || !restaurantIdOrSlug || dishes.length === 0) return 0;
+  try {
+    const resolvedRestId = await resolveRestaurantDbId(restaurantIdOrSlug);
+    if (!resolvedRestId) return 0;
+
+    let syncedCount = 0;
+    for (const entry of dishes) {
+      const cleanCat = (entry.category || 'Main Menu').trim();
+      const it = entry.item;
+      const { error } = await supabase.from('menu_items').upsert({
+        id: it.id,
+        restaurant_id: resolvedRestId,
+        category: cleanCat,
+        name: it.name,
+        description: it.description || '',
+        price: Number(it.price) || 0,
+        badge: it.badge || '',
+        image_url: it.imageUrl || '',
+        prep_time: it.prepTime || '15 min',
+        allergens: it.allergens || [],
+        is_sold_out: Boolean(it.isSoldOut)
+      }, { onConflict: 'id' });
+      if (!error) syncedCount++;
+    }
+    return syncedCount;
+  } catch (err) {
+    console.warn('syncAllDishesToSupabase exception:', err);
+    return 0;
+  }
+}

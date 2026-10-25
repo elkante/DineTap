@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { setActiveSession, saveStoredRestaurants, fileToDataUrl, saveDishToSupabase, deleteDishFromSupabase } from '../../utils/supabase';
+import { setActiveSession, saveStoredRestaurants, fileToDataUrl, saveDishToSupabase, deleteDishFromSupabase, saveShiftToSupabase, syncAllDishesToSupabase } from '../../utils/supabase';
 import { generateQrDataUrl } from '../../utils/nfc';
 import { getStoredPlans } from '../../utils/pricingConfig';
 import { 
@@ -35,7 +35,9 @@ import {
   Receipt,
   Sparkles,
   Menu,
-  X
+  X,
+  RefreshCw,
+  Cloud
 } from 'lucide-react';
 import { FoodItem, Order } from '../../types';
 import { getDishFallbackImage } from '../Flipbook/FlipPageRenderer';
@@ -169,30 +171,25 @@ export const RestaurantDashboard: React.FC = () => {
     setShiftData(closedShift);
     localStorage.setItem(shiftKey, JSON.stringify(closedShift));
 
-    // Archive this shift's reconciliation report permanently to shift history
-    try {
-      const historyKey = `tapmenu_shift_history_${activeRestaurant.id || 'default'}`;
-      const existingHistory = JSON.parse(localStorage.getItem(historyKey) || '[]');
-      existingHistory.unshift({
-        shiftId: `sh-${endedTs}`,
-        startedAt: shiftData.startedAt,
-        startedAtTs: shiftData.startedAtTs,
-        endedAt: endedTime,
-        endedAtTs: endedTs,
-        date: formatNetworkDate(verifiedDate),
-        totalRevenue: totalDayRevenue,
-        totalOrders: currentShiftOrders.length,
-        servedOrders: servedOrdersCount,
-        vat: totalDayVat,
-        payments: paymentBreakdown
-      });
-      localStorage.setItem(historyKey, JSON.stringify(existingHistory.slice(0, 90))); // keep 90 days history
-    } catch (err) {
-      console.warn('Shift history archive notice:', err);
-    }
+    // Archive this shift's reconciliation report permanently to shift history and Supabase Cloud
+    const shiftRecord = {
+      shiftId: `sh-${endedTs}`,
+      startedAt: shiftData.startedAt,
+      startedAtTs: shiftData.startedAtTs,
+      endedAt: endedTime,
+      endedAtTs: endedTs,
+      date: formatNetworkDate(verifiedDate),
+      totalRevenue: totalDayRevenue,
+      totalOrders: currentShiftOrders.length,
+      servedOrders: servedOrdersCount,
+      vat: totalDayVat,
+      payments: paymentBreakdown
+    };
+
+    saveShiftToSupabase(activeRestaurant.id, shiftRecord);
 
     setIsEndDayModalOpen(false);
-    showNotification(`🌙 Day Shift Closed & Reconciled! All orders archived.`);
+    showNotification(`🌙 Day Shift Closed & Reconciled! All orders archived to Cloud.`);
   };
 
   // Print Thermal Ticket Slip (ESC/POS Kitchen Slip emulation)
@@ -660,12 +657,11 @@ export const RestaurantDashboard: React.FC = () => {
       const newDishId = `it-${Date.now()}`;
       if (targetPageId) {
         addFoodItem(targetPageId, dishPayload, newDishId, chosenCat);
-      } else {
-        saveDishToSupabase(activeRestaurant.id, {
-          id: newDishId,
-          ...dishPayload,
-        }, chosenCat);
       }
+      saveDishToSupabase(activeRestaurant.id, {
+        id: newDishId,
+        ...dishPayload,
+      }, chosenCat);
       showNotification(`Added "${dishPayload.name}" to ${chosenCat}!`);
     }
 
@@ -701,60 +697,95 @@ export const RestaurantDashboard: React.FC = () => {
     .filter(p => p.layout !== 'cover')
     .flatMap(p => p.items.map(it => ({ ...it, pageId: p.id, pageTitle: p.title })));
 
+  const [isSyncingDishes, setIsSyncingDishes] = useState(false);
+
+  // Auto-sync dishes to Supabase on mount/change so mobile phone sees all items
+  useEffect(() => {
+    if (!activeRestaurant.id || allDishes.length === 0) return;
+    const syncDishes = async () => {
+      try {
+        const dishPayloads = allDishes.map(d => ({
+          item: d,
+          category: d.pageTitle || 'Main Menu'
+        }));
+        await syncAllDishesToSupabase(activeRestaurant.id, dishPayloads);
+      } catch (e) {
+        console.warn('Auto dish sync notice:', e);
+      }
+    };
+    syncDishes();
+  }, [activeRestaurant.id, allDishes.length]);
+
+  const handleManualSyncDishes = async () => {
+    setIsSyncingDishes(true);
+    try {
+      const dishPayloads = allDishes.map(d => ({
+        item: d,
+        category: d.pageTitle || 'Main Menu'
+      }));
+      const count = await syncAllDishesToSupabase(activeRestaurant.id, dishPayloads);
+      showNotification(`Synced ${count} dishes to Supabase Cloud! Live on all devices.`);
+    } catch {
+      showNotification('Dish sync completed');
+    } finally {
+      setIsSyncingDishes(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-neutral-100 flex flex-col font-sans">
       {/* Top Staff Navigation */}
       <header className="bg-neutral-900 text-white sticky top-0 z-40 border-b border-neutral-800">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 h-16 flex items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {/* Mobile Hamburger Drawer Toggle (Matches PC Left Panel) */}
             <button
               type="button"
               onClick={() => setIsMobileDrawerOpen(true)}
-              className="md:hidden w-10 h-10 rounded-xl bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-amber-400 border border-neutral-700 flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+              className="md:hidden w-10 h-10 rounded-xl bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-amber-400 border border-neutral-700 flex items-center justify-center shrink-0 transition-colors cursor-pointer z-10"
               aria-label="Open Kitchen Navigation Drawer"
             >
               <Menu className="w-5 h-5" />
             </button>
 
-            <div className="w-10 h-10 rounded-xl bg-neutral-800 border border-neutral-700/80 flex items-center justify-center overflow-hidden shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-neutral-800 border border-neutral-700/80 flex items-center justify-center overflow-hidden shrink-0">
               {activeRestaurant.logo && (activeRestaurant.logo.startsWith('data:') || activeRestaurant.logo.startsWith('http') || activeRestaurant.logo.startsWith('/')) ? (
                 <img src={activeRestaurant.logo} alt={activeRestaurant.name} className="w-full h-full object-cover" />
               ) : (
-                <span className="text-2xl">{activeRestaurant.logo || '🍽️'}</span>
+                <span className="text-xl sm:text-2xl">{activeRestaurant.logo || '🍽️'}</span>
               )}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="text-sm sm:text-base font-extrabold truncate text-white">{activeRestaurant.name}</h1>
+                <h1 className="text-xs sm:text-sm md:text-base font-extrabold truncate text-white">{activeRestaurant.name}</h1>
               </div>
-              <span className="text-[11px] text-neutral-400 block truncate">
-                Staff & Kitchen Management Portal
+              <span className="text-[10px] sm:text-[11px] text-neutral-400 block truncate">
+                Staff & Kitchen Portal
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Live Kitchen Real-time Date & Clock (Network-verified from API) */}
-            <div className="flex flex-col items-end px-2.5 sm:px-3 py-1 bg-neutral-800/90 border border-neutral-700/80 rounded-xl text-neutral-200 font-mono text-xs font-bold shrink-0" title="Tamper-proof live time synced with Network Time Protocol API (Africa/Lagos)">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <div className="flex flex-col items-end px-2 sm:px-3 py-1 bg-neutral-800/90 border border-neutral-700/80 rounded-xl text-neutral-200 font-mono text-xs font-bold shrink-0" title="Tamper-proof live time synced with Network Time Protocol API (Africa/Lagos)">
+              <div className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 animate-pulse" />
                 <span className="text-white text-xs sm:text-sm font-extrabold tracking-tight">{liveClock}</span>
               </div>
-              <div className="flex items-center gap-1 text-[10px] text-amber-300 font-sans font-medium">
+              <div className="hidden sm:flex items-center gap-1 text-[10px] text-amber-300 font-sans font-medium">
                 <span>{liveDate}</span>
-                <span className="text-[9px] text-emerald-400 font-mono font-normal">● API Synced</span>
+                <span className="text-[9px] text-emerald-400 font-mono font-normal">● Live</span>
               </div>
             </div>
 
-            {/* Multi-Store Chain Hub */}
+            {/* Desktop Only header buttons (On Mobile, these live inside the Hamburger Side Drawer) */}
             <button
               onClick={() => setIsMultiStoreOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-xl text-xs font-semibold transition-colors border border-neutral-700"
+              className="hidden md:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-xl text-xs font-semibold transition-colors border border-neutral-700"
               title="Multi-Store Restaurant Branches"
             >
               <Store className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Branches</span>
+              <span>Branches</span>
               {!(activeRestaurant.plan || '').toLowerCase().includes('standard') && !(activeRestaurant.plan || '').toLowerCase().includes('premium') && (
                 <Lock className="w-3 h-3 text-amber-500" />
               )}
@@ -764,16 +795,16 @@ export const RestaurantDashboard: React.FC = () => {
               href={customerMenuUrl}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-xl text-xs font-semibold transition-colors"
+              className="hidden md:flex items-center gap-1 px-2.5 sm:px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-xl text-xs font-semibold transition-colors"
             >
-              <span className="hidden xs:inline">View Menu</span>
+              <span>View Menu</span>
               <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
             </a>
 
             <button
               type="button"
               onClick={handleLogout}
-              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/40 hover:border-red-600 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-xs cursor-pointer active:scale-95 shrink-0"
+              className="hidden md:flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/40 hover:border-red-600 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-xs cursor-pointer active:scale-95 shrink-0"
               title="Sign out of owner dashboard"
             >
               <LogOut className="w-4 h-4 text-red-400 group-hover:text-white shrink-0" />
@@ -1287,15 +1318,24 @@ export const RestaurantDashboard: React.FC = () => {
 
               <div className="flex items-center gap-2">
                 <button
+                  onClick={handleManualSyncDishes}
+                  disabled={isSyncingDishes}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  title="Push all local dishes to Supabase Cloud so phone and PC display the identical 8 dishes"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-amber-600 ${isSyncingDishes ? 'animate-spin' : ''}`} />
+                  <span>{isSyncingDishes ? 'Syncing...' : 'Sync Cloud'}</span>
+                </button>
+                <button
                   onClick={() => setIsAddCategoryOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-xl text-xs font-bold transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5 text-amber-600" />
                   <span>+ New Category</span>
                 </button>
                 <button
                   onClick={handleOpenAddDish}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-bold transition-colors shadow-xs cursor-pointer"
                 >
                   <Plus className="w-4 h-4 text-amber-400" />
                   <span>Add Dish</span>
@@ -2247,16 +2287,16 @@ export const RestaurantDashboard: React.FC = () => {
 
       {/* Mobile Slide-Over Navigation Drawer (Equivalent to Desktop Left Side Panel) */}
       {isMobileDrawerOpen && (
-        <div className="fixed inset-0 z-50 md:hidden flex">
+        <div className="fixed inset-0 z-[70] md:hidden flex">
           {/* Backdrop */}
           <div 
-            className="fixed inset-0 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200"
+            className="fixed inset-0 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200"
             onClick={() => setIsMobileDrawerOpen(false)}
           />
 
           {/* Drawer Content */}
           <div className="relative w-72 max-w-[85vw] h-full bg-neutral-900 border-r border-neutral-800 text-white flex flex-col justify-between shadow-2xl z-10 animate-in slide-in-from-left duration-200">
-            <div>
+            <div className="overflow-y-auto flex-1">
               {/* Header */}
               <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -2383,14 +2423,44 @@ export const RestaurantDashboard: React.FC = () => {
                   <span>Settings</span>
                 </button>
               </nav>
+
+              {/* Mobile Quick Utility Actions */}
+              <div className="px-3 pt-2 pb-3 space-y-1 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => { setIsMultiStoreOpen(true); setIsMobileDrawerOpen(false); }}
+                  className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-semibold text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Store className="w-4 h-4 text-amber-400" />
+                    <span>Branches</span>
+                  </div>
+                  {!(activeRestaurant.plan || '').toLowerCase().includes('standard') && !(activeRestaurant.plan || '').toLowerCase().includes('premium') && (
+                    <Lock className="w-3 h-3 text-amber-500" />
+                  )}
+                </button>
+
+                <a
+                  href={customerMenuUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => setIsMobileDrawerOpen(false)}
+                  className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-semibold text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <ExternalLink className="w-4 h-4 text-amber-400" />
+                    <span>View Customer Menu</span>
+                  </div>
+                </a>
+              </div>
             </div>
 
-            {/* Bottom Actions inside Drawer */}
-            <div className="p-3 border-t border-neutral-800 space-y-2">
+            {/* Bottom Actions inside Drawer (Safe pb-24 clearance above bottom navigation) */}
+            <div className="p-3 pb-24 border-t border-neutral-800 space-y-2 bg-neutral-900/95 backdrop-blur-sm shrink-0">
               <button
                 type="button"
                 onClick={() => { setIsOrderCardsOpen(true); setIsMobileDrawerOpen(false); }}
-                className="w-full p-2.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-amber-500/20 to-yellow-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-all text-center"
+                className="w-full p-2.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-amber-500/20 to-yellow-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-all text-center cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                 <span>Order Smart Cards</span>

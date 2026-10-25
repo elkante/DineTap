@@ -635,6 +635,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               }
             }
           )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'menu_items' },
+            (payload: any) => {
+              if (!isMounted) return;
+              const row = payload.new || payload.old;
+              if (!row) return;
+              const matchesRest = row.restaurant_id === targetRestId || (targetSlug && row.restaurant_id === targetSlug);
+              if (!matchesRest) return;
+
+              const slugToFetch = targetSlug || activeRestaurant.slug;
+              if (slugToFetch) {
+                fetchRestaurantBySlug(slugToFetch).then(remote => {
+                  if (remote && isMounted) {
+                    setRestaurants(prev => [remote, ...prev.filter(r => r.id !== remote.id && r.slug !== remote.slug)]);
+                  }
+                });
+              }
+            }
+          )
           .subscribe();
       } catch (err) {
         console.warn('Realtime channel subscription notice:', err);
