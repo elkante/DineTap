@@ -93,6 +93,7 @@ interface AppContextType {
   // Ordering & Waiter Actions
   addToCart: (item: FoodItem, notes?: string, qty?: number) => void;
   updateCartItemQuantity: (index: number, quantity: number) => void;
+  updateCartItemType: (index: number, itemType: 'dine_in' | 'takeaway') => void;
   removeFromCart: (index: number) => void;
   clearCart: () => void;
   placeOrder: (
@@ -1289,6 +1290,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCart(prev => prev.map((ci, idx) => idx === index ? { ...ci, quantity } : ci));
   };
 
+  const updateCartItemType = (index: number, itemType: 'dine_in' | 'takeaway') => {
+    setCart(prev => prev.map((ci, idx) => idx === index ? { ...ci, itemType } : ci));
+  };
+
   const removeFromCart = (index: number) => {
     setCart(prev => prev.filter((_, i) => i !== index));
   };
@@ -1497,6 +1502,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         simulateNfcTap,
         addToCart,
         updateCartItemQuantity,
+        updateCartItemType,
         removeFromCart,
         clearCart,
         placeOrder,

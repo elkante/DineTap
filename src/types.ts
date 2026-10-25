@@ -129,6 +129,8 @@ export interface CartItem {
   quantity: number;
   notes?: string;
   tableNumber?: string;
+  /** Per-item: whether this item is eaten here or packed to go */
+  itemType?: 'dine_in' | 'takeaway';
 }
 
 export interface Order {

@@ -103,17 +103,17 @@ export const TopNav: React.FC<{
             )}
           </button>
 
-          {/* Cart Trigger */}
+          {/* Cart Trigger — big pill always visible */}
           <button
             onClick={onOpenCart}
-            className="relative flex items-center gap-2 px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 active:scale-95 text-white rounded-xl font-bold transition-all shadow-md"
+            className="relative flex items-center gap-2 px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 active:scale-95 text-white rounded-2xl font-bold transition-all shadow-lg"
           >
-            <ShoppingBag className="w-4 h-4 text-amber-400 shrink-0" />
-            <span className="text-xs hidden sm:inline whitespace-nowrap">
-              {totalCartCount > 0 ? `My Order (${totalCartCount})` : 'Order Now'}
+            <ShoppingBag className="w-5 h-5 text-amber-400 shrink-0" />
+            <span className="text-sm whitespace-nowrap">
+              {totalCartCount > 0 ? `Order (${totalCartCount})` : 'Order'}
             </span>
             {totalCartCount > 0 && (
-              <span className="w-5 h-5 bg-amber-500 text-neutral-950 font-black text-[11px] rounded-full flex items-center justify-center shadow-xs">
+              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-amber-500 text-neutral-950 font-black text-[11px] rounded-full flex items-center justify-center shadow border-2 border-white">
                 {totalCartCount}
               </span>
             )}
