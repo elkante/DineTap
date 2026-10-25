@@ -107,15 +107,15 @@ export const TopNav: React.FC<{
               )}
             </button>
 
-            {/* Floating chat bubble label — always visible, points left toward button */}
-            <div className="absolute -top-9 left-1/2 -translate-x-1/2 pointer-events-none select-none">
-              <div className="relative bg-neutral-900 text-white text-[10px] font-semibold px-2.5 py-1 rounded-xl whitespace-nowrap shadow-lg">
+            {/* Floating chat bubble — below the button, tail points UP */}
+            <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 pointer-events-none select-none z-50">
+              {/* Tail pointing up */}
+              <span className="block w-0 h-0 mx-auto
+                border-l-[5px] border-l-transparent
+                border-r-[5px] border-r-transparent
+                border-b-[6px] border-b-neutral-900" />
+              <div className="bg-neutral-900 text-white text-[10px] font-semibold px-2.5 py-1 rounded-xl whitespace-nowrap shadow-lg">
                 👋 We're here!
-                {/* Bubble tail pointing down */}
-                <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-0 h-0
-                  border-l-[5px] border-l-transparent
-                  border-r-[5px] border-r-transparent
-                  border-t-[6px] border-t-neutral-900" />
               </div>
             </div>
           </div>
