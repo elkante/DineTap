@@ -21,6 +21,7 @@ import {
   syncRemotePlans,
   PlanTier 
 } from '../../utils/pricingConfig';
+import { NotchedBottomBar } from '../Navigation/NotchedBottomBar';
 import { 
   ShieldCheck, 
   Building2, 
@@ -1502,6 +1503,20 @@ export const SuperAdminView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Mobile Ergonomic Notched Floating Bottom Navigation Bar */}
+      <NotchedBottomBar
+        variant="super_admin"
+        activeTab={activeTab}
+        onTabChange={(tab) => {
+          setActiveTab(tab);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onOpenOnboardModal={() => setIsOnboardModalOpen(true)}
+        totalRestaurants={totalRestaurants}
+        hasPlanChanges={hasPlanChanges}
+        onLockSession={handleLock}
+      />
     </div>
   );
 };

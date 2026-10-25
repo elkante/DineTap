@@ -23,9 +23,11 @@ import {
   getNotificationPermissionStatus,
   setAppBadgeCount 
 } from '../../utils/pwaNotifications';
+import { NotchedBottomBar } from '../Navigation/NotchedBottomBar';
 
 export const KitchenOrdersView: React.FC = () => {
   const [testingChime, setTestingChime] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'all' | 'active' | 'served' | 'calls'>('active');
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(() => getNotificationPermissionStatus());
   const { 
     orders, 
@@ -77,7 +79,7 @@ export const KitchenOrdersView: React.FC = () => {
     .reduce((sum, o) => sum + o.total, 0);
 
   return (
-    <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 space-y-4">
+    <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 space-y-4 pb-28 md:pb-6">
       {/* Top Header */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -173,14 +175,15 @@ export const KitchenOrdersView: React.FC = () => {
         </div>
 
       {/* Waiter Assistance Alert Banner (If active table calls) */}
-      {restaurantCalls.length > 0 && (
-        <div className="bg-amber-500 text-neutral-950 p-4 rounded-2xl shadow-md space-y-2">
-          <div className="flex items-center gap-2 font-bold text-sm">
-            <PhoneCall className="w-4 h-4 animate-bounce" />
-            <span>Active Table Call Alerts ({restaurantCalls.length})</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-            {restaurantCalls.map((call) => (
+      <div id="waiter-calls-section">
+        {restaurantCalls.length > 0 && (
+          <div className="bg-amber-500 text-neutral-950 p-4 rounded-2xl shadow-md space-y-2">
+            <div className="flex items-center gap-2 font-bold text-sm">
+              <PhoneCall className="w-4 h-4 animate-bounce" />
+              <span>Active Table Call Alerts ({restaurantCalls.length})</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+              {restaurantCalls.map((call) => (
               <div 
                 key={call.id} 
                 className="bg-neutral-900 text-white p-3 rounded-xl flex items-center justify-between text-xs shadow-sm"
@@ -200,6 +203,7 @@ export const KitchenOrdersView: React.FC = () => {
           </div>
         </div>
       )}
+      </div>
 
       {/* Orders Kanban Grid */}
       <div className="space-y-4">
@@ -314,32 +318,64 @@ export const KitchenOrdersView: React.FC = () => {
       </div>
 
       {/* Completed Orders History (Foldable) */}
-      {completedOrders.length > 0 && (
-        <div className="pt-4 border-t border-neutral-200">
-          <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-3">
-            Completed Orders Today ({completedOrders.length})
-          </h3>
-          <div className="bg-white rounded-2xl border border-neutral-200 divide-y divide-neutral-100 overflow-hidden">
-            {completedOrders.slice(0, 5).map((o) => (
-              <div key={o.id} className="p-3.5 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-3">
-                  <span className="font-mono font-bold text-neutral-800">#{o.id}</span>
-                  <span className="font-semibold text-neutral-700">{o.tableNumber}</span>
-                  <span className="text-neutral-400">· {o.customerName}</span>
+      <div id="completed-orders-section">
+        {completedOrders.length > 0 && (
+          <div className="pt-4 border-t border-neutral-200">
+            <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-3">
+              Completed Orders Today ({completedOrders.length})
+            </h3>
+            <div className="bg-white rounded-2xl border border-neutral-200 divide-y divide-neutral-100 overflow-hidden">
+              {completedOrders.slice(0, 5).map((o) => (
+                <div key={o.id} className="p-3.5 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono font-bold text-neutral-800">#{o.id}</span>
+                    <span className="font-semibold text-neutral-700">{o.tableNumber}</span>
+                    <span className="text-neutral-400">· {o.customerName}</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="font-mono font-bold text-neutral-900">
+                      {activeRestaurant.design.currencySymbol}{o.total.toLocaleString()}
+                    </span>
+                    <span className="text-emerald-700 font-semibold text-[11px] bg-emerald-50 px-2 py-0.5 rounded">
+                      Served & Paid
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <span className="font-mono font-bold text-neutral-900">
-                    {activeRestaurant.design.currencySymbol}{o.total.toLocaleString()}
-                  </span>
-                  <span className="text-emerald-700 font-semibold text-[11px] bg-emerald-50 px-2 py-0.5 rounded">
-                    Served & Paid
-                  </span>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+
+      {/* Mobile Ergonomic Notched Floating Bottom Navigation Bar */}
+      <NotchedBottomBar
+        variant="kitchen"
+        activeOrdersCount={activeOrders.length}
+        waiterCallsCount={restaurantCalls.length}
+        completedOrdersCount={completedOrders.length}
+        isTestingChime={testingChime}
+        onTestChime={handleTestAlert}
+        currentFilter={mobileTab}
+        onFilterActive={() => {
+          setMobileTab('active');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onFilterServed={() => {
+          setMobileTab('served');
+          const el = document.getElementById('completed-orders-section');
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth' });
+          }
+        }}
+        onOpenCalls={() => {
+          setMobileTab('calls');
+          const el = document.getElementById('waiter-calls-section');
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth' });
+          }
+        }}
+        onBackToMenu={() => setCurrentView('flipbook')}
+      />
     </div>
   );
 };
