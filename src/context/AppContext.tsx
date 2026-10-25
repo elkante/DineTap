@@ -25,6 +25,7 @@ import {
   resolveWaiterCallInSupabase,
   saveDishToSupabase,
   deleteDishFromSupabase,
+  renameCategoryInSupabase,
   getActiveSession, 
   setActiveSession as saveActiveSession, 
   OwnerSession,
@@ -68,12 +69,12 @@ interface AppContextType {
 
   // Pages & Items
   updatePage: (pageId: string, updates: Partial<MenuBookPage>) => void;
-  addPage: (layout: PageLayoutType) => void;
+  addPage: (layout: PageLayoutType, categoryTitle?: string) => void;
   deletePage: (pageId: string) => void;
   duplicatePage: (pageId: string) => void;
   reorderPages: (fromIndex: number, toIndex: number) => void;
-  addFoodItem: (pageId: string, item: Omit<FoodItem, 'id'>, customId?: string) => FoodItem | void;
-  updateFoodItem: (pageId: string, itemId: string, updates: Partial<FoodItem>) => void;
+  addFoodItem: (pageId: string, item: Omit<FoodItem, 'id'>, customId?: string, categoryName?: string) => FoodItem | void;
+  updateFoodItem: (pageId: string, itemId: string, updates: Partial<FoodItem>, categoryName?: string) => void;
   deleteFoodItem: (pageId: string, itemId: string) => void;
   toggleSoldOut: (pageId: string, itemId: string) => void;
 
@@ -635,21 +636,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateRestaurantMeta = (meta: Partial<RestaurantTenant>) => {
-    setRestaurants(prev => prev.map(r => {
-      if (r.id !== activeRestaurantId) return r;
-      return { ...r, ...meta };
-    }));
+    setRestaurants(prev => {
+      const updated = prev.map(r => {
+        if (r.id !== activeRestaurantId) return r;
+        return { ...r, ...meta };
+      });
+      saveStoredRestaurants(updated);
+      return updated;
+    });
     showNotification('Restaurant profile updated');
   };
 
   const updateDesign = (designUpdates: Partial<MenuBookDesign>) => {
-    setRestaurants(prev => prev.map(r => {
-      if (r.id !== activeRestaurantId) return r;
-      return {
-        ...r,
-        design: { ...r.design, ...designUpdates }
-      };
-    }));
+    setRestaurants(prev => {
+      const updated = prev.map(r => {
+        if (r.id !== activeRestaurantId) return r;
+        return {
+          ...r,
+          design: { ...r.design, ...designUpdates }
+        };
+      });
+      saveStoredRestaurants(updated);
+      return updated;
+    });
   };
 
   const applyTemplate = (templateId: MenuTemplateId) => {
@@ -663,44 +672,78 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updatePage = (pageId: string, updates: Partial<MenuBookPage>) => {
-    setRestaurants(prev => prev.map(r => {
-      if (r.id !== activeRestaurantId) return r;
-      return {
-        ...r,
-        pages: r.pages.map(p => p.id === pageId ? { ...p, ...updates } : p)
-      };
-    }));
+    const targetRest = restaurants.find(r => r.id === activeRestaurantId) || activeRestaurant;
+    const targetPage = targetRest?.pages?.find(p => p.id === pageId);
+    const oldTitle = targetPage?.title || '';
+
+    setRestaurants(prev => {
+      const updated = prev.map(r => {
+        if (r.id !== activeRestaurantId) return r;
+        return {
+          ...r,
+          pages: r.pages.map(p => p.id === pageId ? { ...p, ...updates } : p)
+        };
+      });
+      saveStoredRestaurants(updated);
+      return updated;
+    });
+
+    // If section title / category was renamed, update all associated dishes in Supabase!
+    if (updates.title && oldTitle && updates.title.trim().toLowerCase() !== oldTitle.trim().toLowerCase() && targetRest?.id) {
+      renameCategoryInSupabase(targetRest.id, oldTitle.trim(), updates.title.trim());
+    }
   };
 
-  const addPage = (layout: PageLayoutType) => {
-    const newPageNum = activeRestaurant.pages.length + 1;
+  const addPage = (layout: PageLayoutType, categoryTitle?: string) => {
+    const targetRest = restaurants.find(r => r.id === activeRestaurantId) || activeRestaurant;
+    const newPageNum = (targetRest?.pages?.length || 0) + 1;
+    const title = categoryTitle?.trim() || `Page ${newPageNum}`;
     const newPage: MenuBookPage = {
       id: `p-${Date.now()}`,
       pageNumber: newPageNum,
-      title: `Page ${newPageNum}`,
-      subtitle: 'Delicious courses crafted fresh daily',
+      title,
+      subtitle: `${title} crafted fresh daily`,
       layout,
       items: []
     };
 
-    setRestaurants(prev => prev.map(r => {
-      if (r.id !== activeRestaurantId) return r;
-      return { ...r, pages: [...r.pages, newPage] };
-    }));
-    showNotification(`Added new ${layout} page`);
+    setRestaurants(prev => {
+      const updated = prev.map(r => {
+        if (r.id !== activeRestaurantId) return r;
+        return { ...r, pages: [...r.pages, newPage] };
+      });
+      saveStoredRestaurants(updated);
+      return updated;
+    });
+    showNotification(`Added new "${title}" page`);
   };
 
   const deletePage = (pageId: string) => {
-    if (activeRestaurant.pages.length <= 1) {
+    const targetRest = restaurants.find(r => r.id === activeRestaurantId) || activeRestaurant;
+    if (targetRest && targetRest.pages.length <= 1) {
       showNotification('Cannot delete the only page in your menu');
       return;
     }
-    setRestaurants(prev => prev.map(r => {
-      if (r.id !== activeRestaurantId) return r;
-      const filtered = r.pages.filter(p => p.id !== pageId);
-      const renumbered = filtered.map((p, idx) => ({ ...p, pageNumber: idx + 1 }));
-      return { ...r, pages: renumbered };
-    }));
+    const targetPage = targetRest?.pages.find(p => p.id === pageId);
+
+    setRestaurants(prev => {
+      const updated = prev.map(r => {
+        if (r.id !== activeRestaurantId) return r;
+        const filtered = r.pages.filter(p => p.id !== pageId);
+        const renumbered = filtered.map((p, idx) => ({ ...p, pageNumber: idx + 1 }));
+        return { ...r, pages: renumbered };
+      });
+      saveStoredRestaurants(updated);
+      return updated;
+    });
+
+    // Delete any dishes on that page from Supabase
+    if (targetPage && targetPage.items.length > 0) {
+      targetPage.items.forEach(it => {
+        deleteDishFromSupabase(it.id);
+      });
+    }
+
     showNotification('Page removed');
   };
 
@@ -715,139 +758,177 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       items: target.items.map(it => ({ ...it, id: `it-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` }))
     };
 
-    setRestaurants(prev => prev.map(r => {
-      if (r.id !== activeRestaurantId) return r;
-      const idx = r.pages.findIndex(p => p.id === pageId);
-      const newPages = [...r.pages];
-      newPages.splice(idx + 1, 0, duplicated);
-      return {
-        ...r,
-        pages: newPages.map((p, i) => ({ ...p, pageNumber: i + 1 }))
-      };
-    }));
+    setRestaurants(prev => {
+      const updated = prev.map(r => {
+        if (r.id !== activeRestaurantId) return r;
+        const idx = r.pages.findIndex(p => p.id === pageId);
+        const newPages = [...r.pages];
+        newPages.splice(idx + 1, 0, duplicated);
+        return {
+          ...r,
+          pages: newPages.map((p, i) => ({ ...p, pageNumber: i + 1 }))
+        };
+      });
+      saveStoredRestaurants(updated);
+      return updated;
+    });
     showNotification('Page duplicated');
   };
 
   const reorderPages = (fromIndex: number, toIndex: number) => {
-    setRestaurants(prev => prev.map(r => {
-      if (r.id !== activeRestaurantId) return r;
-      const pagesCopy = [...r.pages];
-      const [moved] = pagesCopy.splice(fromIndex, 1);
-      pagesCopy.splice(toIndex, 0, moved);
-      return {
-        ...r,
-        pages: pagesCopy.map((p, idx) => ({ ...p, pageNumber: idx + 1 }))
-      };
-    }));
+    setRestaurants(prev => {
+      const updated = prev.map(r => {
+        if (r.id !== activeRestaurantId) return r;
+        const pagesCopy = [...r.pages];
+        const [moved] = pagesCopy.splice(fromIndex, 1);
+        pagesCopy.splice(toIndex, 0, moved);
+        return {
+          ...r,
+          pages: pagesCopy.map((p, idx) => ({ ...p, pageNumber: idx + 1 }))
+        };
+      });
+      saveStoredRestaurants(updated);
+      return updated;
+    });
   };
 
-  const addFoodItem = (pageId: string, itemData: Omit<FoodItem, 'id'>, customId?: string): FoodItem => {
+  const addFoodItem = (pageId: string, itemData: Omit<FoodItem, 'id'>, customId?: string, categoryName?: string): FoodItem => {
     const newItem: FoodItem = {
       ...itemData,
       id: customId || `it-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
     };
 
-    let targetCatTitle = 'Specialities';
-    setRestaurants(prev => prev.map(r => {
-      if (r.id !== activeRestaurantId) return r;
-      return {
-        ...r,
-        pages: r.pages.map(p => {
-          if (p.id !== pageId) return p;
-          targetCatTitle = p.title || 'Specialities';
-          return { ...p, items: [...p.items, newItem] };
-        })
-      };
-    }));
-
-    // Auto-persist directly to Supabase & local cache
     const targetRest = restaurants.find(r => r.id === activeRestaurantId) || activeRestaurant;
+    const targetPage = targetRest.pages.find(p => p.id === pageId);
+    const resolvedCatTitle = (categoryName || targetPage?.title || 'Main Menu').trim();
+
+    setRestaurants(prev => {
+      const updated = prev.map(r => {
+        if (r.id !== activeRestaurantId) return r;
+        const pageExists = r.pages.some(p => p.id === pageId);
+        if (!pageExists) {
+          const newPage: MenuBookPage = {
+            id: pageId,
+            pageNumber: r.pages.length + 1,
+            title: resolvedCatTitle,
+            subtitle: `${resolvedCatTitle} prepared fresh to order`,
+            layout: 'two_column_grid',
+            items: [newItem]
+          };
+          return { ...r, pages: [...r.pages, newPage] };
+        }
+        return {
+          ...r,
+          pages: r.pages.map(p => {
+            if (p.id !== pageId) return p;
+            return { ...p, items: [...p.items, newItem] };
+          })
+        };
+      });
+      saveStoredRestaurants(updated);
+      return updated;
+    });
+
+    // Auto-persist directly to Supabase & local cache with real category
     if (targetRest?.id) {
-      saveDishToSupabase(targetRest.id, newItem, targetCatTitle);
+      saveDishToSupabase(targetRest.id, newItem, resolvedCatTitle);
     }
 
-    showNotification(`Added "${newItem.name}" to menu`);
+    showNotification(`Added "${newItem.name}" to ${resolvedCatTitle}`);
     return newItem;
   };
 
-  const updateFoodItem = (pageId: string, itemId: string, updates: Partial<FoodItem>) => {
-    let targetCatTitle = 'Specialities';
-    let updatedItem: FoodItem | null = null;
-
-    setRestaurants(prev => prev.map(r => {
-      if (r.id !== activeRestaurantId) return r;
-      return {
-        ...r,
-        pages: r.pages.map(p => {
-          if (p.id !== pageId) return p;
-          targetCatTitle = p.title || 'Specialities';
-          return {
-            ...p,
-            items: p.items.map(it => {
-              if (it.id === itemId) {
-                updatedItem = { ...it, ...updates };
-                return updatedItem;
-              }
-              return it;
-            })
-          };
-        })
-      };
-    }));
-
+  const updateFoodItem = (pageId: string, itemId: string, updates: Partial<FoodItem>, categoryName?: string) => {
     const targetRest = restaurants.find(r => r.id === activeRestaurantId) || activeRestaurant;
+    const targetPage = targetRest.pages.find(p => p.id === pageId);
+    const resolvedCatTitle = (categoryName || targetPage?.title || 'Main Menu').trim();
+
+    const currentItem = targetPage?.items.find(it => it.id === itemId);
+    const updatedItem: FoodItem | null = currentItem ? { ...currentItem, ...updates } : null;
+
+    setRestaurants(prev => {
+      const updated = prev.map(r => {
+        if (r.id !== activeRestaurantId) return r;
+        return {
+          ...r,
+          pages: r.pages.map(p => {
+            if (p.id !== pageId) return p;
+            return {
+              ...p,
+              items: p.items.map(it => {
+                if (it.id === itemId) {
+                  return { ...it, ...updates };
+                }
+                return it;
+              })
+            };
+          })
+        };
+      });
+      saveStoredRestaurants(updated);
+      return updated;
+    });
+
     if (targetRest?.id && updatedItem) {
-      saveDishToSupabase(targetRest.id, updatedItem, targetCatTitle);
+      saveDishToSupabase(targetRest.id, updatedItem, resolvedCatTitle);
     }
   };
 
   const deleteFoodItem = (pageId: string, itemId: string) => {
-    setRestaurants(prev => prev.map(r => {
-      if (r.id !== activeRestaurantId) return r;
-      return {
-        ...r,
-        pages: r.pages.map(p => {
-          if (p.id !== pageId) return p;
-          return {
-            ...p,
-            items: p.items.filter(it => it.id !== itemId)
-          };
-        })
-      };
-    }));
+    setRestaurants(prev => {
+      const updated = prev.map(r => {
+        if (r.id !== activeRestaurantId) return r;
+        return {
+          ...r,
+          pages: r.pages.map(p => {
+            if (p.id !== pageId) return p;
+            return {
+              ...p,
+              items: p.items.filter(it => it.id !== itemId)
+            };
+          })
+        };
+      });
+      saveStoredRestaurants(updated);
+      return updated;
+    });
     deleteDishFromSupabase(itemId);
     showNotification('Item removed from menu');
   };
 
   const toggleSoldOut = (pageId: string, itemId: string) => {
-    let targetCatTitle = 'Specialities';
-    let toggledItem: FoodItem | null = null;
-
-    setRestaurants(prev => prev.map(r => {
-      if (r.id !== activeRestaurantId) return r;
-      return {
-        ...r,
-        pages: r.pages.map(p => {
-          if (p.id !== pageId) return p;
-          targetCatTitle = p.title || 'Specialities';
-          return {
-            ...p,
-            items: p.items.map(it => {
-              if (it.id !== itemId) return it;
-              const nextState = !it.isSoldOut;
-              toggledItem = { ...it, isSoldOut: nextState };
-              showNotification(`"${it.name}" marked ${nextState ? 'Sold Out' : 'Available'}`);
-              return toggledItem;
-            })
-          };
-        })
-      };
-    }));
-
     const targetRest = restaurants.find(r => r.id === activeRestaurantId) || activeRestaurant;
-    if (targetRest?.id && toggledItem) {
-      saveDishToSupabase(targetRest.id, toggledItem, targetCatTitle);
+    const targetPage = targetRest.pages.find(p => p.id === pageId);
+    const resolvedCatTitle = (targetPage?.title || 'Main Menu').trim();
+
+    const currentItem = targetPage?.items.find(it => it.id === itemId);
+    if (!currentItem) return;
+
+    const nextState = !currentItem.isSoldOut;
+    const toggledItem: FoodItem = { ...currentItem, isSoldOut: nextState };
+
+    setRestaurants(prev => {
+      const updated = prev.map(r => {
+        if (r.id !== activeRestaurantId) return r;
+        return {
+          ...r,
+          pages: r.pages.map(p => {
+            if (p.id !== pageId) return p;
+            return {
+              ...p,
+              items: p.items.map(it => it.id === itemId ? toggledItem : it)
+            };
+          })
+        };
+      });
+      saveStoredRestaurants(updated);
+      return updated;
+    });
+
+    if (targetRest?.id) {
+      saveDishToSupabase(targetRest.id, toggledItem, resolvedCatTitle);
     }
+    showNotification(`"${currentItem.name}" marked ${nextState ? 'Sold Out' : 'Available'}`);
   };
 
   // Helper to determine max tables allowed for a restaurant

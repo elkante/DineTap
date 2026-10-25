@@ -241,11 +241,12 @@ export const RestaurantDashboard: React.FC = () => {
     if (!file) return;
     try {
       const dataUrl = await fileToDataUrl(file);
-      updateFoodItem(dish.pageId, dish.id, { imageUrl: dataUrl });
+      const dishCat = dish.pageTitle || activeRestaurant.pages.find(p => p.id === dish.pageId)?.title || 'Main Menu';
+      updateFoodItem(dish.pageId, dish.id, { imageUrl: dataUrl }, dishCat);
       saveDishToSupabase(activeRestaurant.id, {
         ...dish,
         imageUrl: dataUrl
-      }, dish.pageTitle || 'Specialities');
+      }, dishCat);
       showNotification(`Photo attached to "${dish.name}"!`);
     } catch {
       showNotification('Failed to read image file');
@@ -261,7 +262,7 @@ export const RestaurantDashboard: React.FC = () => {
     setNewItemPrepTime('15 min');
     setNewItemImage('');
     const firstContentPage = contentPages[0];
-    setNewItemCategory(firstContentPage?.title || 'Specialities');
+    setNewItemCategory(firstContentPage?.title || 'Main Menu');
     setIsCustomCategoryInput(false);
     setIsAddItemOpen(true);
   };
@@ -274,7 +275,8 @@ export const RestaurantDashboard: React.FC = () => {
     setNewItemBadge(dish.badge || '');
     setNewItemPrepTime(dish.prepTime || '15 min');
     setNewItemImage(dish.imageUrl || '');
-    setNewItemCategory(dish.pageTitle || 'Specialities');
+    const dishCat = dish.pageTitle || activeRestaurant.pages.find(p => p.id === dish.pageId)?.title || 'Main Menu';
+    setNewItemCategory(dishCat);
     setIsCustomCategoryInput(false);
     setIsAddItemOpen(true);
   };
@@ -283,7 +285,7 @@ export const RestaurantDashboard: React.FC = () => {
     e.preventDefault();
     if (!newItemName.trim()) return;
 
-    const chosenCat = newItemCategory.trim() || 'Specialities';
+    const chosenCat = newItemCategory.trim() || contentPages[0]?.title || 'Main Menu';
 
     const dishPayload = {
       name: newItemName.trim(),
@@ -321,9 +323,9 @@ export const RestaurantDashboard: React.FC = () => {
           ...dishPayload,
           isSoldOut: editingDish.isSoldOut,
           allergens: editingDish.allergens,
-        }, editingDish.id);
+        }, editingDish.id, chosenCat);
       } else {
-        updateFoodItem(editingDish.pageId, editingDish.id, dishPayload);
+        updateFoodItem(editingDish.pageId, editingDish.id, dishPayload, chosenCat);
       }
 
       saveDishToSupabase(activeRestaurant.id, {
@@ -337,7 +339,7 @@ export const RestaurantDashboard: React.FC = () => {
       // Add new dish
       const newDishId = `it-${Date.now()}`;
       if (targetPageId) {
-        addFoodItem(targetPageId, dishPayload, newDishId);
+        addFoodItem(targetPageId, dishPayload, newDishId, chosenCat);
       } else {
         saveDishToSupabase(activeRestaurant.id, {
           id: newDishId,
@@ -1326,7 +1328,7 @@ export const RestaurantDashboard: React.FC = () => {
                         type="button"
                         onClick={() => {
                           setIsCustomCategoryInput(false);
-                          setNewItemCategory(contentPages[0]?.title || 'Specialities');
+                          setNewItemCategory(contentPages[0]?.title || 'Main Menu');
                         }}
                         className="px-2.5 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-600 rounded-xl text-xs font-bold shrink-0"
                       >

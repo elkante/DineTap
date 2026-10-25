@@ -130,11 +130,34 @@ function mapDbRowToRestaurant(rRow: any, itemRows: any[] = []): RestaurantTenant
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const currency = rRow.currency || '₦';
 
+  // Check local cache for existing restaurant structure
+  const stored = getStoredRestaurants();
+  const localMatch = stored.find(r => r.id === rRow.id || r.slug === rRow.slug);
+
   // Group items by category into pages
   const itemsByCategory: Record<string, FoodItem[]> = {};
   if (Array.isArray(itemRows) && itemRows.length > 0) {
     itemRows.forEach(it => {
-      const cat = it.category || 'Specialities';
+      let cat = (it.category || '').trim();
+
+      // If category in DB is empty or generic 'Specialities' / 'specialties',
+      // check if the local restaurant already placed this dish into a custom user category!
+      if (!cat || cat.toLowerCase() === 'specialities' || cat.toLowerCase() === 'specialties') {
+        const localPageWithItem = localMatch?.pages?.find(p => 
+          p.layout !== 'cover' && p.items?.some(i => i.id === it.id)
+        );
+        if (
+          localPageWithItem && 
+          localPageWithItem.title && 
+          localPageWithItem.title.toLowerCase() !== 'specialities' && 
+          localPageWithItem.title.toLowerCase() !== 'specialties'
+        ) {
+          cat = localPageWithItem.title.trim();
+        } else if (!cat) {
+          cat = 'Main Menu';
+        }
+      }
+
       if (!itemsByCategory[cat]) itemsByCategory[cat] = [];
       itemsByCategory[cat].push({
         id: it.id,
@@ -150,7 +173,7 @@ function mapDbRowToRestaurant(rRow: any, itemRows: any[] = []): RestaurantTenant
     });
   }
 
-  // Generate pages: Page 1 is Cover, subsequent pages are categories
+  // Generate pages: Page 1 is Cover
   const pages: MenuBookPage[] = [
     {
       id: `p-${rRow.id}-cover`,
@@ -163,34 +186,58 @@ function mapDbRowToRestaurant(rRow: any, itemRows: any[] = []): RestaurantTenant
     }
   ];
 
-  const categories = Object.keys(itemsByCategory);
-  if (categories.length > 0) {
-    categories.forEach((catName, idx) => {
+  // Preserve existing user-defined pages from local cache so empty categories (or custom titled categories) are NEVER wiped out!
+  const existingLocalPages = (localMatch?.pages || []).filter(p => p.layout !== 'cover');
+  const seenCategories = new Set<string>();
+
+  if (existingLocalPages.length > 0) {
+    existingLocalPages.forEach((p, idx) => {
+      const catKey = p.title.trim();
+      seenCategories.add(catKey.toLowerCase());
+
+      // Match items for this category (case-insensitive)
+      const matchedItemsKey = Object.keys(itemsByCategory).find(k => k.toLowerCase() === catKey.toLowerCase());
+      const remoteItems = matchedItemsKey ? itemsByCategory[matchedItemsKey] : [];
+
+      // If remote has items for this category, use them; if not, keep local items
+      const finalItems = remoteItems.length > 0 ? remoteItems : (p.items || []);
+
       pages.push({
-        id: `p-${rRow.id}-${idx + 2}`,
+        ...p,
         pageNumber: idx + 2,
-        title: catName,
-        subtitle: `${catName} crafted fresh daily`,
-        layout: idx === 0 ? 'chef_specials' : 'two_column_grid',
-        items: itemsByCategory[catName]
+        title: p.title,
+        subtitle: p.subtitle || `${p.title} prepared fresh daily`,
+        layout: p.layout || (idx === 0 ? 'chef_specials' : 'two_column_grid'),
+        items: finalItems
       });
     });
-  } else {
-    // If no items in Supabase yet, check local cache to see if there are locally created dishes
-    const localMatch = getStoredRestaurants().find(r => r.id === rRow.id || r.slug === rRow.slug);
-    if (localMatch && localMatch.pages && localMatch.pages.length > 1 && localMatch.pages.some(p => p.items && p.items.length > 0)) {
-      pages.push(...localMatch.pages.filter(p => p.layout !== 'cover'));
-    } else {
-      // Empty starter page ready for dishes (NO mock dishes)
+  }
+
+  // Any remaining categories from remote items that weren't in local pages
+  Object.keys(itemsByCategory).forEach(catName => {
+    if (!seenCategories.has(catName.toLowerCase())) {
+      seenCategories.add(catName.toLowerCase());
       pages.push({
-        id: `p-${rRow.id}-2`,
-        pageNumber: 2,
-        title: 'Menu',
-        subtitle: 'Dishes prepared fresh to order',
-        layout: 'chef_specials',
-        items: []
+        id: `p-${rRow.id}-${pages.length + 1}`,
+        pageNumber: pages.length + 1,
+        title: catName,
+        subtitle: `${catName} crafted fresh daily`,
+        layout: pages.length === 1 ? 'chef_specials' : 'two_column_grid',
+        items: itemsByCategory[catName]
       });
     }
+  });
+
+  // If still no content pages, provide a starter page
+  if (pages.length <= 1) {
+    pages.push({
+      id: `p-${rRow.id}-2`,
+      pageNumber: 2,
+      title: 'Main Menu',
+      subtitle: 'Dishes prepared fresh to order',
+      layout: 'chef_specials',
+      items: []
+    });
   }
 
   // Create initial 5 tables for QR / NFC
@@ -789,14 +836,15 @@ export async function resolveRestaurantDbId(idOrSlug: string): Promise<string> {
 export async function saveDishToSupabase(
   restaurantIdOrSlug: string,
   item: FoodItem,
-  category: string = 'Specialities'
+  category: string = 'Main Menu'
 ): Promise<{ success: boolean; error?: string }> {
+  const cleanCat = category.trim() || 'Main Menu';
+
   // Sync to local cache first so it's instantly visible
   try {
     const stored = getStoredRestaurants();
     const updated = stored.map(r => {
       if (r.id !== restaurantIdOrSlug && r.slug.toLowerCase() !== restaurantIdOrSlug.toLowerCase()) return r;
-      const cleanCat = category.trim() || 'Specialities';
       let pageFound = false;
       const newPages = r.pages.map(p => {
         if (p.title.toLowerCase() === cleanCat.toLowerCase()) {
@@ -838,7 +886,7 @@ export async function saveDishToSupabase(
     const { error } = await supabase.from('menu_items').upsert({
       id: item.id,
       restaurant_id: resolvedRestId,
-      category: category || 'Specialities',
+      category: cleanCat,
       name: item.name,
       description: item.description || '',
       price: Number(item.price) || 0,
@@ -857,6 +905,66 @@ export async function saveDishToSupabase(
   } catch (e: any) {
     console.warn('Save dish to Supabase exception:', e);
     return { success: false, error: e?.message || 'Error saving dish' };
+  }
+}
+
+/**
+ * Rename a category across all dishes in Supabase and local cache
+ */
+export async function renameCategoryInSupabase(
+  restaurantIdOrSlug: string,
+  oldTitle: string,
+  newTitle: string
+): Promise<boolean> {
+  const cleanOld = oldTitle.trim();
+  const cleanNew = newTitle.trim();
+  if (!cleanOld || !cleanNew || cleanOld === cleanNew) return true;
+
+  // 1. Update local cache
+  try {
+    const stored = getStoredRestaurants();
+    const updated = stored.map(r => {
+      if (r.id !== restaurantIdOrSlug && r.slug.toLowerCase() !== restaurantIdOrSlug.toLowerCase()) return r;
+      return {
+        ...r,
+        pages: r.pages.map(p => {
+          if (p.title.toLowerCase() === cleanOld.toLowerCase()) {
+            return {
+              ...p,
+              title: cleanNew,
+              subtitle: `${cleanNew} prepared fresh daily`
+            };
+          }
+          return p;
+        })
+      };
+    });
+    saveStoredRestaurants(updated);
+  } catch (err) {
+    console.warn('Local category rename error:', err);
+  }
+
+  if (!supabase) return false;
+
+  try {
+    const resolvedRestId = await resolveRestaurantDbId(restaurantIdOrSlug);
+    if (!resolvedRestId) return false;
+
+    // Update in Supabase menu_items table
+    const { error } = await supabase
+      .from('menu_items')
+      .update({ category: cleanNew })
+      .eq('restaurant_id', resolvedRestId)
+      .ilike('category', cleanOld);
+
+    if (error) {
+      console.warn('Supabase rename category error:', error);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn('Supabase rename category exception:', e);
+    return false;
   }
 }
 

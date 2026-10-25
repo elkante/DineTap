@@ -92,7 +92,7 @@ export const MenuBookBuilder: React.FC = () => {
       badge: newItemBadge,
       imageUrl: newItemImage,
       prepTime: '15 min'
-    });
+    }, undefined, selectedPage.title);
 
     setNewItemName('');
     setNewItemDesc('');
