@@ -4,6 +4,7 @@ import {
   ArrowRight, 
   CheckCircle2, 
   X,
+  Menu,
   Store,
   KeyRound,
   Mail,
@@ -22,6 +23,7 @@ import { PWAInstallButton } from '../PWAInstallButton';
 export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPricing }) => {
   const { showNotification } = useApp();
   const [authModal, setAuthModal] = useState<'signup' | 'login' | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [contactConfig, setContactConfig] = useState<PlatformContactConfig>(() => getStoredPlatformContact());
@@ -170,23 +172,105 @@ export const LandingPage: React.FC<{ onOpenPricing?: () => void }> = ({ onOpenPr
             <a href="#features" className="hover:text-amber-900 transition-colors">Why TapMenu</a>
           </div>
 
-          {/* Right Action Buttons */}
-          <div className="flex items-center gap-2 sm:gap-3 text-xs">
+          {/* Right Action Buttons (Desktop) */}
+          <div className="hidden md:flex items-center gap-3 text-xs">
             <PWAInstallButton variant="nav" />
             <button
-              onClick={() => onOpenPricing ? onOpenPricing() : (window.location.search = '?page=pricing')}
-              className="md:hidden px-2.5 py-1.5 text-stone-700 hover:text-stone-950 font-bold transition-colors"
-            >
-              Pricing
-            </button>
-            <button
               onClick={() => { setAuthModal('login'); setErrorMsg(null); }}
-              className="px-3.5 sm:px-4 py-1.5 text-stone-800 hover:text-stone-950 font-bold transition-colors border border-stone-300 rounded-full bg-white/80 hover:bg-white shadow-xs"
+              className="px-4 py-1.5 text-stone-800 hover:text-stone-950 font-bold transition-colors border border-stone-300 rounded-full bg-white/80 hover:bg-white shadow-xs"
             >
               Sign In
             </button>
+            <button
+              onClick={() => { setAuthModal('signup'); setErrorMsg(null); }}
+              className="px-4 py-1.5 bg-[#D4AF37] hover:bg-[#c59f2e] text-stone-950 font-bold rounded-full transition-all shadow-xs"
+            >
+              Create Menu Free
+            </button>
+          </div>
+
+          {/* Mobile Hamburger Toggle Button */}
+          <div className="flex items-center gap-2 md:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="w-10 h-10 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 flex items-center justify-center transition-all active:scale-95 border border-stone-200/90 shadow-xs"
+              aria-label="Toggle navigation menu"
+              aria-expanded={mobileMenuOpen}
+            >
+              {mobileMenuOpen ? (
+                <X className="w-5 h-5 text-stone-900 stroke-[2.25]" />
+              ) : (
+                <Menu className="w-5 h-5 text-stone-900 stroke-[2.25]" />
+              )}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Hamburger Dropdown Tray */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-stone-200 bg-white/98 backdrop-blur-xl px-4 py-4 space-y-3 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex flex-col space-y-1 font-semibold text-sm text-stone-800">
+              <a
+                href="#hero"
+                onClick={() => setMobileMenuOpen(false)}
+                className="px-3 py-2.5 rounded-xl hover:bg-stone-100 transition-colors flex items-center justify-between"
+              >
+                <span>Home</span>
+                <span className="text-[10px] uppercase font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">Welcome</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  if (onOpenPricing) onOpenPricing();
+                  else window.location.search = '?page=pricing';
+                }}
+                className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-stone-100 transition-colors flex items-center justify-between"
+              >
+                <span>Pricing &amp; Plans</span>
+                <span className="text-[10px] uppercase font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Tiers</span>
+              </button>
+              <a
+                href="#features"
+                onClick={() => setMobileMenuOpen(false)}
+                className="px-3 py-2.5 rounded-xl hover:bg-stone-100 transition-colors flex items-center justify-between"
+              >
+                <span>Why TapMenu</span>
+                <span className="text-[10px] uppercase font-bold text-stone-500 bg-stone-100 px-2 py-0.5 rounded">Features</span>
+              </a>
+            </div>
+
+            <div className="pt-3 border-t border-stone-200/80 space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setAuthModal('signup');
+                  setErrorMsg(null);
+                }}
+                className="w-full py-3 bg-[#D4AF37] hover:bg-[#c59f2e] text-stone-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-transform"
+              >
+                <span>Create Your Menu Free</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setAuthModal('login');
+                  setErrorMsg(null);
+                }}
+                className="w-full py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 font-semibold rounded-xl text-xs flex items-center justify-center transition-colors"
+              >
+                Restaurant Owner Sign In
+              </button>
+              <div className="pt-1 flex items-center justify-center">
+                <PWAInstallButton variant="nav" />
+              </div>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* Hero Section: Full-bleed background with atmospheric vignette */}

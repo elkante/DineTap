@@ -2,8 +2,17 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   ShoppingBag, 
-  PhoneCall
+  PhoneCall,
+  Menu,
+  X,
+  BookOpen,
+  Info,
+  CreditCard,
+  ChefHat,
+  ShieldCheck,
+  Check
 } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
 
 export const TopNav: React.FC<{ 
   onOpenCart: () => void; 
@@ -16,8 +25,10 @@ export const TopNav: React.FC<{
     currentTable, 
     cart, 
     waiterCalls,
+    ownerSession
   } = useApp();
 
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   // Secret 6-tap easter egg for platform super admin (/sys-hq)
@@ -49,6 +60,7 @@ export const TopNav: React.FC<{
           <button 
             onClick={handleLogoTap}
             className="flex items-center gap-2 group text-left focus:outline-none min-w-0 active:scale-95 transition-transform"
+            title="TapMenu - Tap 6 times for Super Admin"
           >
             {activeRestaurant.logo && (activeRestaurant.logo.startsWith('data:') || activeRestaurant.logo.startsWith('http') || activeRestaurant.logo.startsWith('/')) ? (
               <img src={activeRestaurant.logo} alt={activeRestaurant.name} className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl object-cover shrink-0 border border-neutral-200" />
@@ -76,7 +88,7 @@ export const TopNav: React.FC<{
           )}
         </div>
 
-        {/* Zone 2: Actions (Waiter Buzzer & Cart) */}
+        {/* Zone 2: Actions (Waiter Buzzer, Cart, and Hamburger Dropdown) */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
 
           {/* Waiter Buzzer Button */}
@@ -104,8 +116,118 @@ export const TopNav: React.FC<{
               </span>
             )}
           </button>
+
+          {/* Mobile Hamburger Toggle Button */}
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden p-2 text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100 rounded-xl transition-colors border border-neutral-200 active:scale-95"
+            aria-label="Toggle navigation menu"
+            aria-expanded={mobileMenuOpen}
+          >
+            {mobileMenuOpen ? (
+              <X className="w-4 h-4 text-neutral-900" />
+            ) : (
+              <Menu className="w-4 h-4 text-neutral-900" />
+            )}
+          </button>
         </div>
       </div>
+
+      {/* Mobile Hamburger Dropdown Tray */}
+      {mobileMenuOpen && (
+        <div className="md:hidden border-t border-neutral-200 bg-white/98 backdrop-blur-xl px-4 py-3.5 space-y-3 shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex flex-col space-y-1 text-xs font-semibold text-neutral-800">
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                setCurrentView('flipbook');
+              }}
+              className={`w-full text-left px-3 py-2.5 rounded-xl transition-colors flex items-center justify-between ${
+                currentView === 'flipbook' ? 'bg-amber-50 text-amber-900 font-bold border border-amber-200/60' : 'hover:bg-neutral-100'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-amber-700" />
+                <span>3D Flipbook Menu</span>
+              </div>
+              {currentView === 'flipbook' && <Check className="w-3.5 h-3.5 text-amber-700" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onOpenCart();
+              }}
+              className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-neutral-100 transition-colors flex items-center justify-between"
+            >
+              <div className="flex items-center gap-2">
+                <ShoppingBag className="w-4 h-4 text-neutral-600" />
+                <span>My Table Order</span>
+              </div>
+              {totalCartCount > 0 ? (
+                <span className="px-2 py-0.5 rounded-full bg-amber-500 text-neutral-950 font-mono text-[10px] font-bold">
+                  {totalCartCount} items
+                </span>
+              ) : (
+                <span className="text-[10px] text-neutral-400">Empty</span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onOpenWaiterModal();
+              }}
+              className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-neutral-100 transition-colors flex items-center justify-between"
+            >
+              <div className="flex items-center gap-2">
+                <PhoneCall className="w-4 h-4 text-amber-600" />
+                <span>Call Waiter / Request Bill</span>
+              </div>
+              <span className="text-[10px] text-amber-700 bg-amber-100/60 px-2 py-0.5 rounded font-bold">
+                Instant
+              </span>
+            </button>
+
+            {/* If Owner / Staff session is active, offer KDS link */}
+            {ownerSession && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setCurrentView('orders');
+                }}
+                className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-neutral-100 transition-colors flex items-center justify-between"
+              >
+                <div className="flex items-center gap-2">
+                  <ChefHat className="w-4 h-4 text-emerald-600" />
+                  <span>Kitchen Display (KDS)</span>
+                </div>
+                <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold">
+                  Staff
+                </span>
+              </button>
+            )}
+          </div>
+
+          {/* Dine-in Table Context & Direct Payments Info */}
+          <div className="pt-2.5 border-t border-neutral-100 flex items-center justify-between text-[11px] text-neutral-500">
+            <span className="flex items-center gap-1">
+              <CreditCard className="w-3.5 h-3.5 text-neutral-400" />
+              <span>Direct Staff POS / Cash</span>
+            </span>
+            {currentTable && (
+              <span className="font-mono font-bold text-neutral-700 bg-neutral-100 px-2 py-0.5 rounded">
+                Table: {currentTable}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   );
 };
