@@ -91,17 +91,34 @@ export const TopNav: React.FC<{
         {/* Zone 2: Actions (Waiter Buzzer, Cart, and Hamburger Dropdown) */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
 
-          {/* Waiter Buzzer Button */}
-          <button
-            onClick={onOpenWaiterModal}
-            className="relative p-2 text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100 rounded-xl transition-colors"
-            title="Call Waiter / Request Bill"
-          >
-            <PhoneCall className="w-4 h-4 text-amber-600" />
-            {waiterCalls.filter(c => c.tableNumber === currentTable).length > 0 && (
-              <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
-            )}
-          </button>
+          {/* Waiter Buzzer — chat-bubble style */}
+          <div className="relative flex items-center">
+            <button
+              onClick={onOpenWaiterModal}
+              className="relative flex items-center gap-2 pl-3 pr-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-2xl font-bold transition-all shadow-lg"
+              title="Call Waiter / Request Bill"
+            >
+              <PhoneCall className="w-4 h-4 shrink-0" />
+              <span className="text-xs whitespace-nowrap hidden sm:inline">Call Waiter</span>
+
+              {/* Pulsing dot when an active call exists */}
+              {waiterCalls.filter(c => c.tableNumber === currentTable).length > 0 && (
+                <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-400 border-2 border-white animate-pulse" />
+              )}
+            </button>
+
+            {/* Floating chat bubble label — always visible, points left toward button */}
+            <div className="absolute -top-9 left-1/2 -translate-x-1/2 pointer-events-none select-none">
+              <div className="relative bg-neutral-900 text-white text-[10px] font-semibold px-2.5 py-1 rounded-xl whitespace-nowrap shadow-lg">
+                👋 We're here!
+                {/* Bubble tail pointing down */}
+                <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-0 h-0
+                  border-l-[5px] border-l-transparent
+                  border-r-[5px] border-r-transparent
+                  border-t-[6px] border-t-neutral-900" />
+              </div>
+            </div>
+          </div>
 
           {/* Cart Trigger — big pill always visible */}
           <button
