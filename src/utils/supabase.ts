@@ -118,6 +118,9 @@ export function setActiveSession(session: OwnerSession | null) {
   } else {
     localStorage.removeItem(KEY_AUTH_SESSION);
   }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('tapmenu_session_updated', { detail: session }));
+  }
 }
 
 /**
@@ -455,15 +458,26 @@ export async function loginRestaurantOwner(
         .maybeSingle();
 
       if (!rRow || rErr) {
-        // User account exists in Supabase Auth, but the restaurant was deleted by an admin!
-        await supabase.auth.signOut().catch(() => {});
-        setActiveSession(null);
-        // Clear from local cache
-        const stored = getStoredRestaurants().filter(r => r.name.toLowerCase() !== cleanQuery);
-        saveStoredRestaurants(stored);
+        // Check if there is a local stored restaurant for this account
+        const stored = getStoredRestaurants();
+        const localMatch = stored.find(r => 
+          (r as any).email?.toLowerCase() === cleanQuery || 
+          r.slug.toLowerCase() === cleanQuery ||
+          r.name.toLowerCase() === cleanQuery.split('@')[0]
+        );
+        if (localMatch) {
+          const sess: OwnerSession = {
+            userId: authData.user.id,
+            email: cleanQuery,
+            restaurantId: localMatch.id,
+            restaurantSlug: localMatch.slug,
+          };
+          setActiveSession(sess);
+          return { success: true, session: sess, restaurant: localMatch };
+        }
         return { 
           success: false, 
-          error: 'Your restaurant menu has been deleted or removed by an administrator. Please register a new menu account.' 
+          error: 'No active restaurant found for this account. Please register a new restaurant.' 
         };
       }
 
@@ -508,14 +522,26 @@ export async function loginRestaurantOwner(
         .maybeSingle();
 
       if (!rRow || rErr) {
-        // Invalidate active session if it was this slug
-        const activeSess = getActiveSession();
-        if (activeSess && (activeSess.restaurantSlug === cleanQuery || activeSess.restaurantId === cleanQuery)) {
-          setActiveSession(null);
+        // Fallback to locally stored restaurants
+        const stored = getStoredRestaurants();
+        const localMatch = stored.find(r => 
+          r.slug.toLowerCase() === cleanQuery || 
+          r.id === cleanQuery ||
+          r.name.toLowerCase() === cleanQuery
+        );
+        if (localMatch) {
+          const sess: OwnerSession = {
+            userId: `user-${localMatch.id}`,
+            email: cleanQuery,
+            restaurantId: localMatch.id,
+            restaurantSlug: localMatch.slug,
+          };
+          setActiveSession(sess);
+          return { success: true, session: sess, restaurant: localMatch };
         }
         return { 
           success: false, 
-          error: `No active restaurant found for "${emailOrSlug}". It may have been deleted or the slug is incorrect.` 
+          error: `No active restaurant found for "${emailOrSlug}". Please check the spelling or register a new menu.` 
         };
       }
 

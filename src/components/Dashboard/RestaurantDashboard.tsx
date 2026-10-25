@@ -417,11 +417,13 @@ export const RestaurantDashboard: React.FC = () => {
             </a>
 
             <button
+              type="button"
               onClick={handleLogout}
-              className="p-1.5 sm:p-2 text-neutral-400 hover:text-red-400 hover:bg-neutral-800 rounded-xl transition-colors"
-              title="Log Out"
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/40 hover:border-red-600 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-xs cursor-pointer active:scale-95 shrink-0"
+              title="Sign out of owner dashboard"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-4 h-4 text-red-400 group-hover:text-white shrink-0" />
+              <span>Log Out</span>
             </button>
           </div>
         </div>
@@ -1192,6 +1194,22 @@ export const RestaurantDashboard: React.FC = () => {
                   onChange={(e) => updateRestaurantMeta({ phone: e.target.value })}
                   className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl focus:outline-none focus:border-neutral-900"
                 />
+              </div>
+
+              {/* Account & Session Management */}
+              <div className="pt-4 border-t border-neutral-200 space-y-2">
+                <label className="block font-bold text-neutral-900 text-xs">Account Session</label>
+                <p className="text-[11px] text-neutral-500">
+                  Signed in as owner of <strong className="text-neutral-800">{activeRestaurant.name}</strong>. You will remain logged in on this browser until you manually sign out.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="w-full py-3 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer mt-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Log Out of Restaurant</span>
+                </button>
               </div>
             </div>
           </div>

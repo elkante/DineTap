@@ -249,60 +249,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsCustomerRoute(false);
       setRestaurantNotFound(false);
 
-      // If owner session exists, verify existence against Supabase
+      // Persistent Owner Session: KEEP USER LOGGED IN until they manually click Log Out!
       const session = getActiveSession();
       if (session) {
+        setOwnerSessionState(session);
+        if (session.restaurantId) {
+          setActiveRestaurantId(session.restaurantId);
+        }
+        // Graceful non-destructive background sync from Supabase
         if (supabase) {
           (async () => {
             try {
-              const { data: rRow, error } = await supabase
+              const { data: rRow } = await supabase
                 .from('restaurants')
                 .select('id, slug, status')
                 .or(`id.eq.${session.restaurantId},slug.eq.${session.restaurantSlug}`)
                 .maybeSingle();
 
-              if (!rRow || error) {
-                // Restaurant was deleted in Supabase! Invalidate session immediately
-                console.warn('Session restaurant no longer exists in Supabase. Invalidating session.');
-                saveActiveSession(null);
-                setOwnerSessionState(null);
-                setActiveRestaurantId('');
-                setRestaurants(prev => prev.filter(r => r.id !== session.restaurantId && r.slug !== session.restaurantSlug));
-              } else {
-                setOwnerSessionState(session);
+              if (rRow) {
                 const remote = await fetchRestaurantBySlug(rRow.slug);
                 if (remote) {
                   setRestaurants(prev => [remote, ...prev.filter(r => r.id !== remote.id)]);
                   setActiveRestaurantId(remote.id);
                 }
               }
-            } catch {
-              setOwnerSessionState(session);
+            } catch (err) {
+              console.debug('Background sync notice (session maintained):', err);
             }
           })();
-        } else {
-          setOwnerSessionState(session);
-          const owned = restaurants.find(r => r.id === session.restaurantId || r.slug === session.restaurantSlug);
-          if (owned) {
-            setActiveRestaurantId(owned.id);
-          }
         }
       }
     }
 
+    const handleSessionUpdated = (e: any) => {
+      const sess = e.detail || getActiveSession();
+      setOwnerSessionState(sess);
+      if (sess?.restaurantId) {
+        setActiveRestaurantId(sess.restaurantId);
+      }
+    };
+    window.addEventListener('tapmenu_session_updated', handleSessionUpdated);
+
     const handleRestaurantDeleted = (e: any) => {
       const deletedId = e.detail?.restaurantId;
       setRestaurants(prev => prev.filter(r => r.id !== deletedId));
-      const currSess = getActiveSession();
-      if (currSess && (currSess.restaurantId === deletedId || currSess.restaurantSlug === deletedId)) {
-        saveActiveSession(null);
-        setOwnerSessionState(null);
-        setActiveRestaurantId('');
-      }
     };
     window.addEventListener('tapmenu_restaurant_deleted', handleRestaurantDeleted);
 
     return () => {
+      window.removeEventListener('tapmenu_session_updated', handleSessionUpdated);
       window.removeEventListener('tapmenu_restaurant_deleted', handleRestaurantDeleted);
     };
   }, []);
