@@ -111,6 +111,17 @@ export interface RestaurantTenant {
   quickMenuEnabled: boolean;
   allowOrdering: boolean;
   tableOrderingEnabled: boolean;
+  /** Takeout pack charge per item or per order (default ₦500) */
+  packagingFeePerPack?: number;
+  /** Subscription & Billing Tracking */
+  subscriptionExpiresAt?: string;
+  subscriptionStatus?: 'active' | 'grace_period' | 'past_due' | 'suspended';
+  /** Multi-store chain / branch hierarchy */
+  ownerId?: string;
+  parentRestaurantId?: string;
+  branchName?: string;
+  /** Owner/admin email address (shown in Super Admin panel) */
+  ownerEmail?: string;
 }
 
 export interface CartItem {
@@ -135,6 +146,50 @@ export interface Order {
   createdAt: string;
   createdAtTimestamp?: number;
   source: 'nfc' | 'qr' | 'web';
+  /** Takeout packaging options */
+  orderType?: 'dine_in' | 'takeaway';
+  packagingFee?: number;
+  packCount?: number;
+}
+
+export interface InventoryItem {
+  id: string;
+  restaurantId: string;
+  name: string;
+  quantity: number;
+  unit: 'kg' | 'packs' | 'liters' | 'pcs' | 'bags' | 'crates' | 'bottles' | 'rolls';
+  minThreshold: number;
+  costPerUnit: number; // in NGN
+  category: 'raw_ingredients' | 'beverages' | 'takeaway_packaging' | 'spices_oils' | 'general';
+  lastUpdated: string;
+}
+
+export interface ExpenseItem {
+  id: string;
+  restaurantId: string;
+  category: 'salary' | 'supplies' | 'fuel_diesel' | 'gas' | 'electricity' | 'packaging' | 'maintenance' | 'rent' | 'other';
+  amount: number; // in NGN
+  description: string;
+  date: string; // YYYY-MM-DD
+  paymentMethod: 'cash' | 'transfer' | 'pos';
+  recordedBy?: string;
+  createdAt: string;
+}
+
+export interface CardOrderRequest {
+  id: string;
+  restaurantId: string;
+  restaurantName: string;
+  contactPhone: string;
+  quantity: number;
+  unitPrice: number; // 7,000 NGN
+  totalAmount: number; // quantity * 7,000 NGN
+  cardType: 'table_nfc' | 'google_review' | 'whatsapp_link' | 'instagram_social' | 'custom_url';
+  targetUrlPayload?: string;
+  tableNumbers?: string;
+  notes?: string;
+  status: 'pending' | 'contacted' | 'fulfilled' | 'cancelled';
+  createdAt: string;
 }
 
 export interface DailyShift {

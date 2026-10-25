@@ -254,13 +254,32 @@ export const QuickMenuView: React.FC<{ onSelectItem: (item: FoodItem) => void }>
           </div>
         ))}
 
-        {filteredItems.length === 0 && (
+        {allItemsWithPage.length === 0 ? (
+          <div className="space-y-3">
+            <div className="text-center py-6 bg-amber-50/70 rounded-2xl border border-amber-200/80 mb-2">
+              <div className="w-8 h-8 mx-auto mb-2 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+              <h4 className="text-sm font-bold text-neutral-800">Preparing fresh menu for {activeRestaurant.name}</h4>
+              <p className="text-xs text-neutral-500 mt-0.5">Fetching dishes, prices & chef specials...</p>
+            </div>
+            {[1, 2, 3, 4].map(idx => (
+              <div key={idx} className="bg-white rounded-2xl border border-neutral-200 p-3 sm:p-4 flex gap-3 sm:gap-4 animate-pulse">
+                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl bg-neutral-200 shrink-0"></div>
+                <div className="flex-1 space-y-2 py-1">
+                  <div className="h-4 bg-neutral-200 rounded w-1/3"></div>
+                  <div className="h-3 bg-neutral-100 rounded w-3/4"></div>
+                  <div className="h-3 bg-neutral-100 rounded w-1/2"></div>
+                  <div className="h-4 bg-amber-100 rounded w-1/4 mt-2"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filteredItems.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-2xl border border-neutral-200">
             <Search className="w-8 h-8 text-neutral-300 mx-auto mb-2" />
             <h4 className="text-sm font-bold text-neutral-800">No matching dishes found</h4>
             <p className="text-xs text-neutral-500 mt-1">Try searching for other ingredients or clear filters.</p>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

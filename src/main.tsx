@@ -27,6 +27,7 @@ class RootErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
+      const errStr = this.state.error?.message || String(this.state.error || 'Unknown error');
       return (
         <div className="min-h-screen bg-[#0c2e22] text-white flex flex-col items-center justify-center p-6 text-center font-sans">
           <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mb-4 shadow-lg">
@@ -36,12 +37,16 @@ class RootErrorBoundary extends Component<Props, State> {
           <p className="text-xs text-neutral-300 mt-2 max-w-sm">
             Something unexpected occurred. Tap below to reload your digital menu.
           </p>
+          <div className="mt-3 p-3 bg-black/40 border border-amber-500/30 rounded-xl text-[11px] font-mono text-amber-300 max-w-xs overflow-x-auto text-left break-words">
+            {errStr}
+          </div>
           <button
             onClick={() => {
               sessionStorage.clear();
+              localStorage.removeItem('dinetap_orders_v3');
               window.location.reload();
             }}
-            className="mt-6 px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-xl text-xs transition-colors shadow-lg active:scale-95"
+            className="mt-6 px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-xl text-xs transition-colors shadow-lg active:scale-95 cursor-pointer"
           >
             Reload Menu
           </button>

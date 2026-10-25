@@ -29,6 +29,8 @@ export const CustomerCartDrawer: React.FC<{ isOpen: boolean; onClose: () => void
 
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [orderType, setOrderType] = useState<'dine_in' | 'takeaway'>('dine_in');
+  const [packCount, setPackCount] = useState(1);
   const [paymentChoice, setPaymentChoice] = useState<'pos' | 'cash' | 'transfer'>('pos');
   const [orderPlacedSuccess, setOrderPlacedSuccess] = useState<string | null>(null);
 
@@ -36,18 +38,24 @@ export const CustomerCartDrawer: React.FC<{ isOpen: boolean; onClose: () => void
 
   const design = activeRestaurant.design;
   const subtotal = cart.reduce((sum, ci) => sum + ci.foodItem.price * ci.quantity, 0);
-  const vat = Math.round(subtotal * 0.075);
-  const total = subtotal + vat;
+  const totalItemCount = cart.reduce((sum, ci) => sum + ci.quantity, 0);
+  const packUnitPrice = activeRestaurant.packagingFeePerPack ?? 500;
+  const packagingFee = orderType === 'takeaway' ? packCount * packUnitPrice : 0;
+  const vat = Math.round((subtotal + packagingFee) * 0.075);
+  const total = subtotal + packagingFee + vat;
 
   const handleCheckout = (e: React.FormEvent) => {
     e.preventDefault();
     const newOrder = placeOrder(
-      customerName || 'Diner at ' + (currentTable || 'Table 01'), 
+      customerName || (orderType === 'takeaway' ? 'Takeout Customer' : 'Diner at ' + (currentTable || 'Table 01')), 
       paymentChoice,
       {
         customerPhone: customerPhone.trim() || undefined,
         subtotal,
-        vat
+        vat,
+        orderType,
+        packagingFee: packagingFee > 0 ? packagingFee : undefined,
+        packCount: orderType === 'takeaway' ? packCount : undefined
       }
     );
     if (newOrder) {
@@ -173,12 +181,84 @@ export const CustomerCartDrawer: React.FC<{ isOpen: boolean; onClose: () => void
             {/* Checkout Form */}
             {cart.length > 0 && (
               <form onSubmit={handleCheckout} className="p-4 border-t border-neutral-200 bg-neutral-50/50 space-y-3 text-xs">
+                {/* Dining Mode Selector: Dine-in vs Takeaway */}
+                <div className="bg-white p-1 rounded-xl border border-neutral-200 flex gap-1 shadow-xs">
+                  <button
+                    type="button"
+                    onClick={() => setOrderType('dine_in')}
+                    className={`flex-1 py-2 px-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+                      orderType === 'dine_in'
+                        ? 'bg-neutral-900 text-white shadow-xs'
+                        : 'text-neutral-600 hover:text-neutral-900'
+                    }`}
+                  >
+                    <span>🍽️ Dine-in</span>
+                    {currentTable && <span className="text-[10px] opacity-75">({currentTable})</span>}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOrderType('takeaway');
+                      if (packCount < 1) setPackCount(Math.max(1, totalItemCount));
+                    }}
+                    className={`flex-1 py-2 px-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+                      orderType === 'takeaway'
+                        ? 'bg-amber-500 text-neutral-950 shadow-xs'
+                        : 'text-neutral-600 hover:text-neutral-900'
+                    }`}
+                  >
+                    <span>🥡 Takeout Pack</span>
+                  </button>
+                </div>
+
+                {/* Takeaway Packaging Options */}
+                {orderType === 'takeaway' && (
+                  <div className="p-2.5 bg-amber-50/80 border border-amber-200 rounded-xl space-y-2 animate-in fade-in">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-bold text-amber-950 text-xs block">Takeout Foil Packaging</span>
+                        <span className="text-[10px] text-amber-700">Sealed food pack + cutlery + carrier bag</span>
+                      </div>
+                      <span className="font-mono text-xs font-bold text-amber-900">
+                        {design.currencySymbol}{packUnitPrice.toLocaleString()} / pack
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-amber-200/60">
+                      <span className="text-[11px] text-amber-900 font-medium">Number of Takeaway Packs:</span>
+                      <div className="flex items-center gap-2 bg-white border border-amber-300 rounded-lg px-2 py-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setPackCount(Math.max(1, packCount - 1))}
+                          className="text-amber-800 hover:text-amber-950 font-bold px-1"
+                        >
+                          -
+                        </button>
+                        <span className="font-mono font-bold text-amber-950 text-xs w-4 text-center">{packCount}</span>
+                        <button
+                          type="button"
+                          onClick={() => setPackCount(packCount + 1)}
+                          className="text-amber-800 hover:text-amber-950 font-bold px-1"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Cost Breakdown */}
                 <div className="space-y-1 text-xs border-b border-neutral-200 pb-3">
                   <div className="flex justify-between text-neutral-600">
-                    <span>Subtotal</span>
+                    <span>Dishes Subtotal</span>
                     <span className="font-mono">{design.currencySymbol}{subtotal.toLocaleString()}</span>
                   </div>
+                  {orderType === 'takeaway' && packagingFee > 0 && (
+                    <div className="flex justify-between text-amber-800 font-medium">
+                      <span>Takeout Packaging ({packCount}x @ {design.currencySymbol}{packUnitPrice.toLocaleString()})</span>
+                      <span className="font-mono">+{design.currencySymbol}{packagingFee.toLocaleString()}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-neutral-600">
                     <span>VAT (7.5%)</span>
                     <span className="font-mono">{design.currencySymbol}{vat.toLocaleString()}</span>

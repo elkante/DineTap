@@ -12,7 +12,7 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
 
 // Local storage keys for resilient offline fallback
 const STORAGE_PREFIX = 'dinetap_';
-const KEY_RESTAURANTS = `${STORAGE_PREFIX}restaurants_v3`;
+export const KEY_RESTAURANTS = `${STORAGE_PREFIX}restaurants_v3`;
 const KEY_ORDERS = `${STORAGE_PREFIX}orders_v3`;
 const KEY_AUTH_SESSION = `${STORAGE_PREFIX}current_owner_v3`;
 
@@ -240,18 +240,40 @@ function mapDbRowToRestaurant(rRow: any, itemRows: any[] = []): RestaurantTenant
     });
   }
 
-  // Create initial 5 tables for QR / NFC
-  const tables = [1, 2, 3, 4, 5].map(num => ({
-    id: `tbl-${rRow.id}-${num}`,
-    tableNumber: `Table ${num}`,
-    label: `Table ${num}`,
-    section: 'Dining Area',
-    ntagSerial: `04:FA:${num.toString().padStart(2, '0')}:88:22:90:${num.toString().padStart(2, '0')}`,
-    nfcStatus: 'active' as const,
-    totalTaps: 0,
-    totalScans: 0,
-    urlPayload: `${origin}/?r=${rRow.slug}&table=Table+${num}`
-  }));
+  // Preserve user-generated tables across logouts & refreshes
+  let tables: any[] = [];
+  if (Array.isArray(rRow.tables) && rRow.tables.length > 0) {
+    tables = rRow.tables;
+  } else if (localMatch?.tables && localMatch.tables.length > 0) {
+    tables = localMatch.tables;
+  } else {
+    try {
+      const dedicated = typeof localStorage !== 'undefined' 
+        ? (localStorage.getItem(`tapmenu_tables_${rRow.id}`) || localStorage.getItem(`tapmenu_tables_${rRow.slug}`))
+        : null;
+      if (dedicated) {
+        const parsed = JSON.parse(dedicated);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          tables = parsed;
+        }
+      }
+    } catch {}
+  }
+
+  // Fallback to initial 5 tables only if brand new restaurant
+  if (tables.length === 0) {
+    tables = [1, 2, 3, 4, 5].map(num => ({
+      id: `tbl-${rRow.id}-${num}`,
+      tableNumber: `Table ${num}`,
+      label: `Table ${num}`,
+      section: 'Dining Area',
+      ntagSerial: `04:FA:${num.toString().padStart(2, '0')}:88:22:90:${num.toString().padStart(2, '0')}`,
+      nfcStatus: 'active' as const,
+      totalTaps: 0,
+      totalScans: 0,
+      urlPayload: `${origin}/?r=${rRow.slug}&table=Table+${num}`
+    }));
+  }
 
   const coverColor = rRow.cover_color || rRow.primary_color || '#0c2e22';
   const accentColor = rRow.accent_color || '#d4af37';
@@ -261,14 +283,15 @@ function mapDbRowToRestaurant(rRow: any, itemRows: any[] = []): RestaurantTenant
     slug: rRow.slug,
     name: rRow.name,
     tagline: rRow.tagline || 'Kitchen & Bar',
-    logo: rRow.logo || '🛡️',
-    coverImage: rRow.cover_image || '',
-    address: rRow.address || '',
-    phone: rRow.phone || '',
-    openingHours: rRow.opening_hours || '10:00 AM - 10:00 PM',
+    logo: rRow.logo || localMatch?.logo || '🛡️',
+    coverImage: rRow.cover_image || localMatch?.coverImage || '',
+    address: rRow.address || localMatch?.address || '',
+    phone: rRow.phone || localMatch?.phone || '',
+    openingHours: rRow.opening_hours || localMatch?.openingHours || '10:00 AM - 10:00 PM',
     plan: rRow.plan || 'basic',
     tableLimit: (rRow.table_limit !== undefined && rRow.table_limit !== null) ? Number(rRow.table_limit) : undefined,
     status: (rRow.status as any) || 'active',
+    ownerEmail: rRow.email || rRow.owner_email || localMatch?.ownerEmail || (rRow.owner_id ? undefined : `admin@${rRow.slug}.com`),
     quickMenuEnabled: true,
     allowOrdering: true,
     tableOrderingEnabled: true,
@@ -387,11 +410,13 @@ export async function registerRestaurant(data: {
   // 2. Insert into Supabase restaurants table
   if (supabase) {
     try {
-      // First attempt: include plan and table_limit
+      // First attempt: include plan, table_limit, and owner email
       let { error: insErr } = await supabase.from('restaurants').insert([
         {
           id: newId,
           owner_id: ownerId,
+          email: data.email?.trim() || undefined,
+          owner_email: data.email?.trim() || undefined,
           name: data.name.trim(),
           slug: cleanSlug,
           tagline: data.tagline?.trim() || 'Kitchen & Bar',
@@ -654,6 +679,7 @@ export async function syncOrderToSupabase(order: Order): Promise<boolean> {
     }
 
     // Clean payload matching exact Supabase orders table schema
+    // Always include payment_method in base payload — this is a core field
     const basePayload: Record<string, any> = {
       id: order.id,
       restaurant_id: order.restaurantId,
@@ -663,6 +689,7 @@ export async function syncOrderToSupabase(order: Order): Promise<boolean> {
       total: Number(order.total) || 0,
       status: order.status || 'pending',
       source: order.source || 'qr',
+      payment_method: order.paymentMethod || 'pos', // Always persist — prevents cash showing as POS
     };
 
     const fullPayload: Record<string, any> = {
@@ -670,7 +697,9 @@ export async function syncOrderToSupabase(order: Order): Promise<boolean> {
       ...(order.customerPhone ? { customer_phone: order.customerPhone } : {}),
       ...(order.subtotal !== undefined ? { subtotal: order.subtotal } : {}),
       ...(order.vat !== undefined ? { vat: order.vat } : {}),
-      ...(order.paymentMethod ? { payment_method: order.paymentMethod } : {}),
+      ...(order.orderType ? { order_type: order.orderType } : {}),
+      ...(order.packagingFee !== undefined ? { packaging_fee: order.packagingFee } : {}),
+      ...(order.packCount !== undefined ? { pack_count: order.packCount } : {}),
     };
 
     let { error } = await supabase.from('orders').insert([fullPayload]);
@@ -764,7 +793,10 @@ export async function fetchOrdersFromSupabase(restaurantId: string, slug?: strin
           status: row.status || 'pending',
           createdAt: safeTime,
           createdAtTimestamp: safeTs,
-          source: row.source || 'qr'
+          source: row.source || 'qr',
+          orderType: row.order_type || 'dine_in',
+          packagingFee: row.packaging_fee ? Number(row.packaging_fee) : undefined,
+          packCount: row.pack_count ? Number(row.pack_count) : undefined
         };
       });
     }
@@ -1079,11 +1111,61 @@ export async function fetchAllRestaurantsFromSupabase(): Promise<RestaurantTenan
  * Update restaurant status in Supabase
  */
 export async function updateRestaurantStatusInSupabase(restaurantId: string, status: 'active' | 'suspended'): Promise<void> {
+  const stored = getStoredRestaurants();
+  const updated = stored.map(r => r.id === restaurantId ? { ...r, status } : r);
+  saveStoredRestaurants(updated);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('tapmenu_status_updated', { detail: { restaurantId, status } }));
+    try {
+      const bc = new BroadcastChannel('tapmenu_live_sync');
+      bc.postMessage({ type: 'STATUS_UPDATED', restaurantId, status });
+      bc.close();
+    } catch {}
+  }
+
   if (!supabase) return;
   try {
     await supabase.from('restaurants').update({ status }).eq('id', restaurantId);
   } catch (e) {
     console.warn('Update restaurant status error:', e);
+  }
+}
+
+/**
+ * Persist restaurant tables to local storage & Supabase
+ */
+export async function syncRestaurantTablesToSupabase(restaurantId: string, tables: any[]): Promise<void> {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(`tapmenu_tables_${restaurantId}`, JSON.stringify(tables));
+    }
+  } catch {}
+
+  const stored = getStoredRestaurants();
+  const updated = stored.map(r => r.id === restaurantId ? { ...r, tables } : r);
+  saveStoredRestaurants(updated);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('tapmenu_tables_updated', { detail: { restaurantId, tables } }));
+    try {
+      const bc = new BroadcastChannel('tapmenu_live_sync');
+      bc.postMessage({ type: 'TABLES_UPDATED', restaurantId, tables });
+      bc.close();
+    } catch {}
+  }
+
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.from('restaurants').update({
+      tables: tables
+    }).eq('id', restaurantId);
+
+    if (error && (error.code === '42703' || error.message?.includes('column'))) {
+      // tables column not in Supabase schema yet; local storage already holds it safely
+    }
+  } catch (e) {
+    console.warn('Update restaurant tables error:', e);
   }
 }
 
@@ -1100,6 +1182,18 @@ export async function updateRestaurantPlanInSupabase(
   const updated = stored.map(r => r.id === restaurantId ? { ...r, plan, tableLimit } : r);
   saveStoredRestaurants(updated);
 
+  // Broadcast instantly across same tab and other tabs
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('tapmenu_plan_updated', { 
+      detail: { restaurantId, plan, tableLimit } 
+    }));
+    try {
+      const bc = new BroadcastChannel('tapmenu_live_sync');
+      bc.postMessage({ type: 'PLAN_UPDATED', restaurantId, plan, tableLimit });
+      bc.close();
+    } catch {}
+  }
+
   if (!supabase) return;
   try {
     const { error } = await supabase.from('restaurants').update({
@@ -1112,6 +1206,57 @@ export async function updateRestaurantPlanInSupabase(
     }
   } catch (e) {
     console.warn('Update restaurant plan error:', e);
+  }
+}
+
+/**
+ * Persist restaurant metadata (logo, name, tagline, address, phone, coverImage, design colors) to Supabase & local cache
+ */
+export async function syncRestaurantMetaToSupabase(
+  restaurantId: string,
+  meta: Partial<RestaurantTenant>
+): Promise<void> {
+  const stored = getStoredRestaurants();
+  const updated = stored.map(r => r.id === restaurantId ? { ...r, ...meta } : r);
+  saveStoredRestaurants(updated);
+
+  if (typeof window !== 'undefined') {
+    try {
+      const bc = new BroadcastChannel('tapmenu_live_sync');
+      bc.postMessage({ type: 'META_UPDATED', restaurantId, meta });
+      bc.close();
+    } catch {}
+  }
+
+  if (!supabase) return;
+
+  try {
+    const updatePayload: Record<string, any> = {};
+    if (meta.name !== undefined) updatePayload.name = meta.name;
+    if (meta.tagline !== undefined) updatePayload.tagline = meta.tagline;
+    if (meta.logo !== undefined) updatePayload.logo = meta.logo;
+    if (meta.coverImage !== undefined) updatePayload.cover_image = meta.coverImage;
+    if (meta.address !== undefined) updatePayload.address = meta.address;
+    if (meta.phone !== undefined) updatePayload.phone = meta.phone;
+    if (meta.openingHours !== undefined) updatePayload.opening_hours = meta.openingHours;
+    if (meta.packagingFeePerPack !== undefined) updatePayload.packaging_fee = meta.packagingFeePerPack;
+    if (meta.design?.primaryColor) updatePayload.primary_color = meta.design.primaryColor;
+    if (meta.design?.coverColor) updatePayload.cover_color = meta.design.coverColor;
+    if (meta.design?.accentColor) updatePayload.accent_color = meta.design.accentColor;
+    if (meta.design?.currencySymbol) updatePayload.currency = meta.design.currencySymbol;
+
+    if (Object.keys(updatePayload).length > 0) {
+      const { error } = await supabase
+        .from('restaurants')
+        .update(updatePayload)
+        .eq('id', restaurantId);
+
+      if (error) {
+        console.warn('Supabase restaurant meta update notice:', error.message);
+      }
+    }
+  } catch (err) {
+    console.warn('Supabase restaurant meta update error:', err);
   }
 }
 
@@ -1220,6 +1365,7 @@ export async function deleteRestaurantFromSupabase(restaurantId: string): Promis
   // 1. Immediately purge from local storage cache so it NEVER resurrects
   try {
     const stored = getStoredRestaurants();
+    const target = stored.find(r => r.id === restaurantId || r.slug === restaurantId);
     const updated = stored.filter(r => r.id !== restaurantId && r.slug !== restaurantId);
     saveStoredRestaurants(updated);
 
@@ -1227,17 +1373,39 @@ export async function deleteRestaurantFromSupabase(restaurantId: string): Promis
     if (activeSess && (activeSess.restaurantId === restaurantId || activeSess.restaurantSlug === restaurantId)) {
       setActiveSession(null);
     }
+
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(`tapmenu_tables_${restaurantId}`);
+      localStorage.removeItem(`tapmenu_inventory_${restaurantId}`);
+      localStorage.removeItem(`tapmenu_expenses_${restaurantId}`);
+      if (target?.slug) {
+        localStorage.removeItem(`tapmenu_tables_${target.slug}`);
+      }
+    }
   } catch (e) {
     console.warn('Local cache cleanup on restaurant delete error:', e);
   }
 
-  // 2. Delete all records from Supabase tables
+  // 2. Delete all records from Supabase tables and purge login
   if (supabase) {
     try {
+      const { data: restRow } = await supabase.from('restaurants').select('owner_id').eq('id', restaurantId).maybeSingle();
+      const ownerId = restRow?.owner_id;
+
       await supabase.from('menu_items').delete().eq('restaurant_id', restaurantId);
       await supabase.from('orders').delete().eq('restaurant_id', restaurantId);
       await supabase.from('waiter_calls').delete().eq('restaurant_id', restaurantId);
+      try {
+        await supabase.from('card_orders').delete().eq('restaurant_id', restaurantId);
+      } catch {}
       await supabase.from('restaurants').delete().eq('id', restaurantId);
+
+      // Attempt to purge auth user record
+      if (ownerId && (supabase.auth as any).admin) {
+        try {
+          await (supabase.auth as any).admin.deleteUser(ownerId);
+        } catch {}
+      }
     } catch (e) {
       console.warn('Delete restaurant from Supabase error:', e);
     }
@@ -1246,6 +1414,11 @@ export async function deleteRestaurantFromSupabase(restaurantId: string): Promis
   // 3. Broadcast deletion event
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('tapmenu_restaurant_deleted', { detail: { restaurantId } }));
+    try {
+      const bc = new BroadcastChannel('tapmenu_live_sync');
+      bc.postMessage({ type: 'RESTAURANT_DELETED', restaurantId });
+      bc.close();
+    } catch {}
   }
 }
 

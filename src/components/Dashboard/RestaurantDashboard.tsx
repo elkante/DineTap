@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { setActiveSession, fileToDataUrl, saveDishToSupabase, deleteDishFromSupabase } from '../../utils/supabase';
+import { setActiveSession, saveStoredRestaurants, fileToDataUrl, saveDishToSupabase, deleteDishFromSupabase } from '../../utils/supabase';
 import { generateQrDataUrl } from '../../utils/nfc';
 import { getStoredPlans } from '../../utils/pricingConfig';
 import { 
@@ -39,9 +39,17 @@ import { FoodItem, Order } from '../../types';
 import { getDishFallbackImage } from '../Flipbook/FlipPageRenderer';
 import { NotchedBottomBar } from '../Navigation/NotchedBottomBar';
 import { playKitchenChime } from '../../utils/audio';
+import { KitchenInventoryView } from './KitchenInventoryView';
+import { KitchenExpenseView } from './KitchenExpenseView';
+import { KitchenArchiveView } from './KitchenArchiveView';
+import { OrderSmartCardsModal } from '../Hardware/OrderSmartCardsModal';
+import { MultiStoreManagerModal } from './MultiStoreManagerModal';
+import { getNetworkVerifiedDate, formatNetworkDate, formatNetworkTime } from '../../utils/networkTime';
+import { Package, DollarSign, Store, Lock, ShieldAlert } from 'lucide-react';
 
 export const RestaurantDashboard: React.FC = () => {
   const { 
+    restaurants,
     activeRestaurant, 
     orders, 
     updateOrderStatus, 
@@ -60,17 +68,22 @@ export const RestaurantDashboard: React.FC = () => {
     showNotification 
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'kds' | 'menu' | 'tables' | 'settings'>('kds');
+  const [activeTab, setActiveTab] = useState<'kds' | 'menu' | 'inventory' | 'expenses' | 'archive' | 'tables' | 'settings'>('kds');
   const [copiedSlug, setCopiedSlug] = useState(false);
   const [tableQrMap, setTableQrMap] = useState<Record<string, string>>({});
+  const [isOrderCardsOpen, setIsOrderCardsOpen] = useState(false);
+  const [isMultiStoreOpen, setIsMultiStoreOpen] = useState(false);
 
-  // Live Digital Kitchen Clock (updates every second)
-  const [liveClock, setLiveClock] = useState(() => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+  // Live Digital Kitchen Date & Clock (Network-verified from API, immune to device tampering)
+  const [liveDate, setLiveDate] = useState(() => formatNetworkDate());
+  const [liveClock, setLiveClock] = useState(() => formatNetworkTime());
   const [clockTick, setClockTick] = useState(0);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setLiveClock(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      const d = getNetworkVerifiedDate();
+      setLiveDate(formatNetworkDate(d));
+      setLiveClock(formatNetworkTime(d));
       setClockTick(t => t + 1);
     }, 1000);
     return () => clearInterval(timer);
@@ -157,12 +170,13 @@ export const RestaurantDashboard: React.FC = () => {
       <body>
         <div class="header">
           <div class="title">${activeRestaurant.name}</div>
-          <div class="table">${order.tableNumber}</div>
+          <div class="table">${order.orderType === 'takeaway' ? '🥡 TAKEOUT PACK' : order.tableNumber}</div>
           <div>Ticket #${order.id}</div>
           <div>${order.createdAt}</div>
           <div>Guest: ${order.customerName}</div>
           ${order.customerPhone ? `<div>Tel: ${order.customerPhone}</div>` : ''}
           ${order.paymentMethod ? `<div>Pay: ${order.paymentMethod.toUpperCase()}</div>` : ''}
+          ${order.orderType === 'takeaway' ? `<div style="font-weight:bold; margin-top:4px;">* TAKEOUT PACKAGING (${order.packCount || 1}x)</div>` : ''}
         </div>
         <div>
           ${order.items.map(i => `
@@ -174,7 +188,8 @@ export const RestaurantDashboard: React.FC = () => {
           `).join('')}
         </div>
         <div class="totals">
-          ${order.subtotal ? `<div class="item-row"><span>Subtotal:</span><span>${activeRestaurant.design.currencySymbol}${order.subtotal.toLocaleString()}</span></div>` : ''}
+          ${order.subtotal ? `<div class="item-row"><span>Dishes Subtotal:</span><span>${activeRestaurant.design.currencySymbol}${order.subtotal.toLocaleString()}</span></div>` : ''}
+          ${order.packagingFee ? `<div class="item-row"><span>Takeout Packaging:</span><span>${activeRestaurant.design.currencySymbol}${order.packagingFee.toLocaleString()}</span></div>` : ''}
           ${order.vat ? `<div class="item-row"><span>VAT (7.5%):</span><span>${activeRestaurant.design.currencySymbol}${order.vat.toLocaleString()}</span></div>` : ''}
           <div class="item-row" style="font-size: 15px; font-weight: bold;">
             <span>TOTAL:</span>
@@ -183,6 +198,75 @@ export const RestaurantDashboard: React.FC = () => {
         </div>
         <div class="footer">
           *** KITCHEN PRODUCTION TICKET ***
+        </div>
+        <script>
+          window.onload = function() { window.print(); window.close(); };
+        </script>
+      </body>
+      </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
+  // Print Clean Z-Report Slip (Thermal Slip emulation instead of full browser screen capture)
+  const handlePrintZReport = () => {
+    const printWindow = window.open('', '_blank', 'width=380,height=700');
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Z-Report - ${activeRestaurant.name}</title>
+        <style>
+          body { font-family: 'Courier New', monospace; font-size: 13px; margin: 12px; color: #000; line-height: 1.4; }
+          .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
+          .title { font-size: 18px; font-weight: bold; }
+          .subtitle { font-size: 11px; margin-top: 2px; }
+          .bold-title { font-size: 14px; font-weight: bold; text-align: center; margin: 6px 0; }
+          .item-row { display: flex; justify-content: space-between; margin: 4px 0; }
+          .section { border-top: 1px dashed #000; margin-top: 8px; padding-top: 6px; }
+          .grand-total { font-size: 16px; font-weight: bold; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 6px 0; margin: 8px 0; display: flex; justify-content: space-between; }
+          .footer { text-align: center; margin-top: 16px; font-size: 11px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="title">${activeRestaurant.name}</div>
+          <div class="subtitle">${activeRestaurant.tagline || 'Daily Shift Closeout'}</div>
+          <div class="bold-title">*** END OF DAY Z-REPORT ***</div>
+          <div class="subtitle">Date: ${liveDate}</div>
+          <div class="subtitle">Shift Time: ${dayStartTime} - ${liveClock}</div>
+        </div>
+
+        <div>
+          <div class="item-row"><span>Total Diners / Guests:</span><span><strong>${totalDinersCount}</strong></span></div>
+          <div class="item-row"><span>Orders Completed / Served:</span><span><strong>${servedOrdersCount} / ${restaurantOrders.length}</strong></span></div>
+        </div>
+
+        <div class="section">
+          <div class="item-row"><span>Dishes Subtotal:</span><span>${activeRestaurant.design.currencySymbol}${totalDaySubtotal.toLocaleString()}</span></div>
+          <div class="item-row"><span>VAT Collected (7.5%):</span><span>${activeRestaurant.design.currencySymbol}${totalDayVat.toLocaleString()}</span></div>
+        </div>
+
+        <div class="grand-total">
+          <span>TOTAL GROSS SALES:</span>
+          <span>${activeRestaurant.design.currencySymbol}${totalDayRevenue.toLocaleString()}</span>
+        </div>
+
+        <div class="section">
+          <div style="font-weight: bold; margin-bottom: 4px;">SETTLEMENT BREAKDOWN:</div>
+          <div class="item-row"><span>💳 Card / POS at Table:</span><span>${activeRestaurant.design.currencySymbol}${paymentBreakdown.pos.toLocaleString()}</span></div>
+          <div class="item-row"><span>💵 Cash to Waiters:</span><span>${activeRestaurant.design.currencySymbol}${paymentBreakdown.cash.toLocaleString()}</span></div>
+          <div class="item-row"><span>🏦 Direct Bank Transfer:</span><span>${activeRestaurant.design.currencySymbol}${paymentBreakdown.transfer.toLocaleString()}</span></div>
+        </div>
+
+        <div class="footer">
+          <div>Verified via TapMenu Network Time (Tamper-Proof)</div>
+          <div>*** END OF DAILY SHIFT REGISTER ***</div>
         </div>
         <script>
           window.onload = function() { window.print(); window.close(); };
@@ -318,6 +402,9 @@ export const RestaurantDashboard: React.FC = () => {
   };
 
   const handleLogout = () => {
+    try {
+      saveStoredRestaurants(restaurants);
+    } catch {}
     setActiveSession(null);
     window.location.href = window.location.pathname;
   };
@@ -557,7 +644,7 @@ export const RestaurantDashboard: React.FC = () => {
     <div className="min-h-screen bg-neutral-100 flex flex-col font-sans">
       {/* Top Staff Navigation */}
       <header className="bg-neutral-900 text-white sticky top-0 z-40 border-b border-neutral-800">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-neutral-800 border border-neutral-700/80 flex items-center justify-center overflow-hidden shrink-0">
               {activeRestaurant.logo && (activeRestaurant.logo.startsWith('data:') || activeRestaurant.logo.startsWith('http') || activeRestaurant.logo.startsWith('/')) ? (
@@ -580,11 +667,30 @@ export const RestaurantDashboard: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* Live Kitchen Real-time Clock */}
-            <div className="hidden xs:flex items-center gap-1.5 px-2.5 py-1.5 bg-neutral-800/90 border border-neutral-700/80 rounded-xl text-neutral-200 font-mono text-xs font-bold shrink-0" title="Live synced kitchen time">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>{liveClock}</span>
+            {/* Live Kitchen Real-time Date & Clock (Network-verified from API) */}
+            <div className="flex flex-col items-end px-2.5 sm:px-3 py-1 bg-neutral-800/90 border border-neutral-700/80 rounded-xl text-neutral-200 font-mono text-xs font-bold shrink-0" title="Tamper-proof live time synced with Network Time Protocol API (Africa/Lagos)">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-white text-xs sm:text-sm font-extrabold tracking-tight">{liveClock}</span>
+              </div>
+              <div className="flex items-center gap-1 text-[10px] text-amber-300 font-sans font-medium">
+                <span>{liveDate}</span>
+                <span className="text-[9px] text-emerald-400 font-mono font-normal">● API Synced</span>
+              </div>
             </div>
+
+            {/* Multi-Store Chain Hub */}
+            <button
+              onClick={() => setIsMultiStoreOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-xl text-xs font-semibold transition-colors border border-neutral-700"
+              title="Multi-Store Restaurant Branches"
+            >
+              <Store className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Branches</span>
+              {!(activeRestaurant.plan || '').toLowerCase().includes('standard') && !(activeRestaurant.plan || '').toLowerCase().includes('premium') && (
+                <Lock className="w-3 h-3 text-amber-500" />
+              )}
+            </button>
 
             <a
               href={customerMenuUrl}
@@ -607,68 +713,142 @@ export const RestaurantDashboard: React.FC = () => {
             </button>
           </div>
         </div>
-
-        {/* Navigation Tabs (Hidden on mobile where the Notched Bottom Bar takes over, visible on md+) */}
-        <div className="hidden md:flex max-w-6xl mx-auto px-2 sm:px-4 items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar whitespace-nowrap text-xs pb-2 border-t border-neutral-800/60 pt-2">
-          <button
-            onClick={() => setActiveTab('kds')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded-xl font-bold shrink-0 transition-all ${
-              activeTab === 'kds'
-                ? 'bg-amber-500 text-neutral-950 shadow'
-                : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
-            }`}
-          >
-            <ChefHat className="w-4 h-4" />
-            <span>Kitchen Display</span>
-            {activeOrders.length > 0 && (
-              <span className={`px-1.5 py-0.2 rounded-full font-mono text-[10px] ${
-                activeTab === 'kds' ? 'bg-neutral-950 text-white' : 'bg-amber-500 text-neutral-950 font-extrabold'
-              }`}>
-                {activeOrders.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('menu')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded-xl font-bold shrink-0 transition-all ${
-              activeTab === 'menu'
-                ? 'bg-amber-500 text-neutral-950 shadow'
-                : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
-            }`}
-          >
-            <Utensils className="w-4 h-4" />
-            <span>Menu Dishes ({allDishes.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('tables')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded-xl font-bold shrink-0 transition-all ${
-              activeTab === 'tables'
-                ? 'bg-amber-500 text-neutral-950 shadow'
-                : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
-            }`}
-          >
-            <QrCode className="w-4 h-4" />
-            <span>Table QR Codes ({activeRestaurant.tables.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded-xl font-bold shrink-0 transition-all ${
-              activeTab === 'settings'
-                ? 'bg-amber-500 text-neutral-950 shadow'
-                : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
-            }`}
-          >
-            <Settings className="w-4 h-4" />
-            <span>Settings</span>
-          </button>
-        </div>
       </header>
 
-      {/* Main Body */}
-      <main className="max-w-6xl mx-auto w-full p-4 sm:p-6 flex-1 pb-28 md:pb-8">
+      {/* Main Workspace: Desktop Left Sidebar + Central Panel Layout */}
+      <div className="flex flex-1 min-h-0 w-full">
+        {/* Desktop Left Side Panel Navigation */}
+        <aside className="hidden md:flex flex-col w-60 shrink-0 bg-neutral-900 border-r border-neutral-800 sticky top-16 h-[calc(100vh-64px)] overflow-y-auto z-30 select-none">
+          {/* Restaurant identity quick info */}
+          <div className="p-4 border-b border-neutral-800/80">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-neutral-400 font-medium truncate">Active Portal</span>
+              <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold">
+                {planDisplayName}
+              </span>
+            </div>
+            <div className="text-xs text-neutral-500 font-mono mt-1 truncate">
+              {allDishes.length} Dishes · {activeRestaurant.tables.length} Tables
+            </div>
+          </div>
+
+          {/* Vertical Menu Tabs */}
+          <nav className="p-3 space-y-1 flex-1">
+            <button
+              onClick={() => setActiveTab('kds')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                activeTab === 'kds'
+                  ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                  : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <ChefHat className="w-4 h-4 shrink-0" />
+                <span>Kitchen Display</span>
+              </div>
+              {activeOrders.length > 0 && (
+                <span className={`px-1.5 py-0.5 rounded-full font-mono text-[10px] font-extrabold ${
+                  activeTab === 'kds' ? 'bg-neutral-950 text-white' : 'bg-amber-500 text-neutral-950'
+                }`}>
+                  {activeOrders.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('menu')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                activeTab === 'menu'
+                  ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                  : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Utensils className="w-4 h-4 shrink-0" />
+                <span>Menu Dishes</span>
+              </div>
+              <span className="text-[10px] font-mono opacity-80">({allDishes.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('inventory')}
+              className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                activeTab === 'inventory'
+                  ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                  : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+              }`}
+            >
+              <Package className="w-4 h-4 shrink-0" />
+              <span>Inventory Manager</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('expenses')}
+              className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                activeTab === 'expenses'
+                  ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                  : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+              }`}
+            >
+              <DollarSign className="w-4 h-4 shrink-0" />
+              <span>Expense Ledger</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('archive')}
+              className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                activeTab === 'archive'
+                  ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                  : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+              }`}
+            >
+              <Calendar className="w-4 h-4 shrink-0" />
+              <span>Archive & Reports</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('tables')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                activeTab === 'tables'
+                  ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                  : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <QrCode className="w-4 h-4 shrink-0" />
+                <span>Table QR Codes</span>
+              </div>
+              <span className="text-[10px] font-mono opacity-80">({activeRestaurant.tables.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                activeTab === 'settings'
+                  ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                  : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+              }`}
+            >
+              <Settings className="w-4 h-4 shrink-0" />
+              <span>Settings</span>
+            </button>
+          </nav>
+
+          {/* Quick Hardware Card Order CTA in Sidebar */}
+          <div className="p-3 border-t border-neutral-800">
+            <button
+              type="button"
+              onClick={() => setIsOrderCardsOpen(true)}
+              className="w-full p-2.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-amber-500/20 to-yellow-500/10 border border-amber-500/30 text-amber-300 hover:text-amber-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all text-center"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Order Smart Cards</span>
+            </button>
+          </div>
+        </aside>
+
+        {/* Main Body */}
+        <main className="flex-1 min-w-0 p-4 sm:p-6 pb-28 md:pb-8 overflow-y-auto">
         {/* ========================================================= */}
         {/* TAB 1: KITCHEN DISPLAY SYSTEM (KDS) */}
         {/* ========================================================= */}
@@ -828,6 +1008,15 @@ export const RestaurantDashboard: React.FC = () => {
                                 {order.source === 'nfc' ? '📱 NFC' : '📷 QR'}
                               </span>
                             </div>
+
+                            {/* Takeout Packaging Badge */}
+                            {order.orderType === 'takeaway' && (
+                              <div className="mt-1.5 flex items-center gap-1.5 px-2 py-0.5 bg-rose-100 text-rose-900 border border-rose-300 rounded-lg text-[11px] font-black tracking-wide w-fit animate-pulse">
+                                <span>🥡 TAKEAWAY PACK</span>
+                                {order.packCount && <span>({order.packCount}x)</span>}
+                                {order.packagingFee && <span className="opacity-75">· +₦{order.packagingFee.toLocaleString()}</span>}
+                              </div>
+                            )}
 
                             {/* Customer Name & Phone */}
                             <div className="text-xs text-neutral-800 mt-1.5 font-bold flex flex-wrap items-center gap-2">
@@ -1288,6 +1477,29 @@ export const RestaurantDashboard: React.FC = () => {
               </div>
             )}
 
+            {/* Hardware Smart Cards Order Banner */}
+            <div className="bg-gradient-to-r from-neutral-900 via-neutral-900 to-neutral-800 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base text-white">Order More Smart NFC Cards & Acrylic Stands</h3>
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    ₦7,000 / custom pre-encoded card. Can be encoded for Dining Tables, Google 5-Star Reviews, or WhatsApp Concierge.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsOrderCardsOpen(true)}
+                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shrink-0 cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Order Cards (₦7k ea)</span>
+              </button>
+            </div>
+
             {/* Bulk Generate Panel */}
             <div className={`border rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 ${isAtTableLimit ? 'bg-neutral-100 border-neutral-300 opacity-60' : 'bg-amber-50 border-amber-200'}`}>
               <div className="flex-1 min-w-0">
@@ -1417,6 +1629,37 @@ export const RestaurantDashboard: React.FC = () => {
               })}
             </div>
           </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB: KITCHEN INVENTORY MANAGER */}
+        {/* ========================================================= */}
+        {activeTab === 'inventory' && (
+          <KitchenInventoryView 
+            restaurant={activeRestaurant} 
+            showNotification={showNotification} 
+          />
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB: KITCHEN EXPENSES MANAGER */}
+        {/* ========================================================= */}
+        {activeTab === 'expenses' && (
+          <KitchenExpenseView 
+            restaurant={activeRestaurant} 
+            showNotification={showNotification} 
+          />
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB: FINANCIAL ARCHIVE & HISTORICAL RECONCILIATION */}
+        {/* ========================================================= */}
+        {activeTab === 'archive' && (
+          <KitchenArchiveView 
+            orders={restaurantOrders} 
+            restaurant={activeRestaurant} 
+            onPrintOrderReceipt={handlePrintTicket} 
+          />
         )}
 
         {/* ========================================================= */}
@@ -1551,6 +1794,7 @@ export const RestaurantDashboard: React.FC = () => {
           </div>
         )}
       </main>
+      </div>
 
       {/* Modal: Add or Edit Food Item */}
       {isAddItemOpen && (
@@ -1907,7 +2151,7 @@ export const RestaurantDashboard: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-3 border-t border-neutral-100">
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={handlePrintZReport}
                 className="w-full sm:w-auto px-4 py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5"
               >
                 <Printer className="w-3.5 h-3.5 text-neutral-600" />
@@ -1925,6 +2169,21 @@ export const RestaurantDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Order Smart Cards Hardware Modal */}
+      <OrderSmartCardsModal
+        isOpen={isOrderCardsOpen}
+        onClose={() => setIsOrderCardsOpen(false)}
+        restaurant={activeRestaurant}
+        showNotification={showNotification}
+      />
+
+      {/* Multi-Store Chain Management Hub Modal */}
+      <MultiStoreManagerModal
+        isOpen={isMultiStoreOpen}
+        onClose={() => setIsMultiStoreOpen(false)}
+        onOpenPricing={() => setActiveTab('settings')}
+      />
 
       {/* Floating Notched Bottom Navigation for Mobile (Replacing the top tab bar) */}
       <NotchedBottomBar

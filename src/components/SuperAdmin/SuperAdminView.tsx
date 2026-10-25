@@ -21,6 +21,8 @@ import {
   syncRemotePlans,
   PlanTier 
 } from '../../utils/pricingConfig';
+import { CardOrderRequest } from '../../types';
+import { getStoredCardOrders, updateCardOrderStatus } from '../../utils/cardOrderStorage';
 import { NotchedBottomBar } from '../Navigation/NotchedBottomBar';
 import { 
   ShieldCheck, 
@@ -79,9 +81,9 @@ export const SuperAdminView: React.FC = () => {
 
   // Authentication State
   const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
-  const [authMode, setAuthMode] = useState<'passcode' | 'supabase'>('passcode');
+  const [authMode, setAuthMode] = useState<'passcode' | 'supabase'>('supabase');
   const [pinInput, setPinInput] = useState('');
-  const [adminEmail, setAdminEmail] = useState('');
+  const [adminEmail, setAdminEmail] = useState('admin@tm.tap');
   const [adminPassword, setAdminPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -97,6 +99,14 @@ export const SuperAdminView: React.FC = () => {
   const [plans, setPlans] = useState<PlanTier[]>(() => getStoredPlans());
   const [hasPlanChanges, setHasPlanChanges] = useState(false);
 
+  // Card hardware orders
+  const [cardOrders, setCardOrders] = useState<CardOrderRequest[]>(() => getStoredCardOrders());
+
+  // Delete & Purge Modal with Required Typing Confirmation
+  const [purgeTarget, setPurgeTarget] = useState<RestaurantTenant | null>(null);
+  const [purgeInput, setPurgeInput] = useState('');
+  const [isPurging, setIsPurging] = useState(false);
+
   // Platform WhatsApp & Contact Settings
   const [contactConfig, setContactConfig] = useState<PlatformContactConfig>(DEFAULT_PLATFORM_CONTACT);
   const [isSavingContact, setIsSavingContact] = useState(false);
@@ -106,7 +116,7 @@ export const SuperAdminView: React.FC = () => {
   const [newName, setNewName] = useState('');
   const [newSlug, setNewSlug] = useState('');
   const [newEmail, setNewEmail] = useState('');
-  const [newPassword, setNewPassword] = useState('pass1234');
+  const [newPassword, setNewPassword] = useState('');
   const [newPlan, setNewPlan] = useState<'Basic' | 'Standard' | 'Premium' | 'Enterprise'>('Standard');
 
   // Load all restaurants from Supabase (merging local cache)
@@ -334,13 +344,36 @@ export const SuperAdminView: React.FC = () => {
     showNotification(`Restaurant status updated to ${nextStatus}`);
   };
 
-  const handleDeleteRestaurant = async (restaurantId: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete "${name}"? This removes all menu items and orders.`)) {
+  const handleInitiatePurge = (tenant: RestaurantTenant) => {
+    setPurgeTarget(tenant);
+    setPurgeInput('');
+  };
+
+  const handleConfirmPurge = async () => {
+    if (!purgeTarget) return;
+    const requiredPhrase = `DELETE ${purgeTarget.slug}`;
+    if (purgeInput.trim() !== requiredPhrase) {
+      showNotification(`Confirmation mismatch. You must type "${requiredPhrase}"`);
       return;
     }
-    await deleteRestaurantFromSupabase(restaurantId);
-    setTenants(prev => prev.filter(t => t.id !== restaurantId));
-    showNotification(`Deleted "${name}"`);
+    setIsPurging(true);
+    try {
+      await deleteRestaurantFromSupabase(purgeTarget.id);
+      setTenants(prev => prev.filter(t => t.id !== purgeTarget.id));
+      showNotification(`🚨 "${purgeTarget.name}" and owner credentials permanently purged.`);
+      setPurgeTarget(null);
+      setPurgeInput('');
+    } catch {
+      showNotification('Failed to purge restaurant.');
+    } finally {
+      setIsPurging(false);
+    }
+  };
+
+  const handleUpdateCardOrderStatus = async (orderId: string, status: CardOrderRequest['status']) => {
+    await updateCardOrderStatus(orderId, status);
+    setCardOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+    showNotification(`Card order marked ${status}`);
   };
 
   const handleSaveContact = async (e: React.FormEvent) => {
@@ -510,7 +543,7 @@ export const SuperAdminView: React.FC = () => {
                   disabled={lockoutSeconds > 0 || isAuthenticating}
                   value={adminEmail}
                   onChange={(e) => setAdminEmail(e.target.value)}
-                  placeholder="admin@tapmenu.com"
+                  placeholder="admin@tm.tap"
                   className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-xl text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400 disabled:opacity-50"
                 />
               </div>
@@ -737,6 +770,7 @@ export const SuperAdminView: React.FC = () => {
                   <thead className="bg-neutral-950/60 border-b border-neutral-800 text-neutral-400 font-bold uppercase tracking-wider text-[10px]">
                     <tr>
                       <th className="py-3.5 px-4">Restaurant</th>
+                      <th className="py-3.5 px-4">Owner Email</th>
                       <th className="py-3.5 px-4">Slug & Live URL</th>
                       <th className="py-3.5 px-4">Plan</th>
                       <th className="py-3.5 px-4">Tables / Dishes</th>
@@ -765,6 +799,21 @@ export const SuperAdminView: React.FC = () => {
                                 <div className="text-[11px] text-neutral-400">{t.tagline || 'Kitchen & Bar'}</div>
                               </div>
                             </div>
+                          </td>
+
+                          <td className="py-3.5 px-4 font-mono text-[11px]">
+                            {/* Owner Email */}
+                            {t.ownerEmail ? (
+                              <a
+                                href={`mailto:${t.ownerEmail}`}
+                                className="text-amber-400 hover:underline flex items-center gap-1 truncate max-w-[160px]"
+                                title={t.ownerEmail}
+                              >
+                                {t.ownerEmail}
+                              </a>
+                            ) : (
+                              <span className="text-neutral-600 italic text-[10px]">No email on file</span>
+                            )}
                           </td>
 
                           <td className="py-3.5 px-4 font-mono text-[11px]">
@@ -863,9 +912,9 @@ export const SuperAdminView: React.FC = () => {
                               </button>
 
                               <button
-                                onClick={() => handleDeleteRestaurant(t.id, t.name)}
+                                onClick={() => handleInitiatePurge(t)}
                                 className="p-1.5 text-neutral-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                                title="Delete restaurant from database"
+                                title="Purge restaurant and credentials"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -877,7 +926,7 @@ export const SuperAdminView: React.FC = () => {
 
                     {filteredTenants.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="py-8 text-center text-neutral-500">
+                        <td colSpan={7} className="py-8 text-center text-neutral-500">
                           No matching restaurants found in Supabase database.
                         </td>
                       </tr>
@@ -908,6 +957,9 @@ export const SuperAdminView: React.FC = () => {
                         <div className="min-w-0">
                           <h4 className="font-bold text-white text-sm truncate">{t.name}</h4>
                           <p className="text-[11px] text-neutral-400 truncate">{t.tagline || 'Kitchen & Bar'}</p>
+                          {t.ownerEmail && (
+                            <p className="text-[10px] text-amber-400/80 font-mono truncate mt-0.5">{t.ownerEmail}</p>
+                          )}
                         </div>
                       </div>
 
@@ -1003,9 +1055,9 @@ export const SuperAdminView: React.FC = () => {
                         <span>Manage Venue</span>
                       </button>
                       <button
-                        onClick={() => handleDeleteRestaurant(t.id, t.name)}
+                        onClick={() => handleInitiatePurge(t)}
                         className="p-2 text-neutral-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl border border-neutral-800 transition-colors"
-                        title="Delete venue"
+                        title="Purge venue"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -1357,7 +1409,175 @@ export const SuperAdminView: React.FC = () => {
           </div>
         )}
 
+        {/* ========================================================= */}
+        {/* TAB 4: SMART CARDS HARDWARE ORDERS (₦7,000 / Card) */}
+        {/* ========================================================= */}
+        {activeTab === 'hardware' && (
+          <div className="space-y-4">
+            <div className="bg-neutral-900 rounded-2xl border border-neutral-800 p-5 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Package className="w-5 h-5 text-amber-400" />
+                  <h3 className="text-base font-extrabold text-white">Smart NFC Cards Hardware Requests</h3>
+                </div>
+                <p className="text-xs text-neutral-400 mt-1">
+                  Incoming hardware orders from kitchens (@ ₦7,000 / custom card). Contact the restaurant via WhatsApp or phone to confirm payment and dispatch shipment.
+                </p>
+              </div>
+
+              <div className="px-3.5 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-xl font-mono text-xs font-bold text-amber-300">
+                {cardOrders.filter(o => o.status === 'pending').length} Pending Orders
+              </div>
+            </div>
+
+            {/* Orders List */}
+            {cardOrders.length === 0 ? (
+              <div className="bg-neutral-900 rounded-2xl border border-neutral-800 p-12 text-center text-neutral-400 space-y-2">
+                <Package className="w-10 h-10 text-neutral-600 mx-auto" />
+                <h4 className="font-bold text-white text-sm">No Hardware Orders Received Yet</h4>
+                <p className="text-xs text-neutral-500 max-w-sm mx-auto">
+                  When restaurants click "Order Cards" in their kitchen dashboard, their custom card requests and contact details will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {cardOrders.map(order => {
+                  const cleanPhone = order.contactPhone.replace(/[^0-9]/g, '');
+                  const waMsg = `Hello ${order.restaurantName}! This is TapMenu Super Admin regarding your order for ${order.quantity} Smart Cards (₦${order.totalAmount.toLocaleString()}). Let's verify your payment and delivery address.`;
+                  const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(waMsg)}`;
+
+                  return (
+                    <div
+                      key={order.id}
+                      className="bg-neutral-900 rounded-2xl border border-neutral-800 p-4 sm:p-5 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-white">#{order.id}</span>
+                          <span className="font-bold text-sm text-amber-400">{order.restaurantName}</span>
+                          <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-bold uppercase ${
+                            order.status === 'fulfilled'
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              : order.status === 'contacted'
+                              ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                              : 'bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse'
+                          }`}>
+                            {order.status}
+                          </span>
+                        </div>
+
+                        <div className="text-xs text-neutral-300 space-y-1">
+                          <div>
+                            <strong>Function: </strong> 
+                            <span className="capitalize">{order.cardType.replace('_', ' ')}</span>
+                            {order.tableNumbers && <span className="text-amber-300 font-mono ml-1.5">({order.tableNumbers})</span>}
+                            {order.targetUrlPayload && <span className="text-neutral-400 ml-1.5">({order.targetUrlPayload})</span>}
+                          </div>
+                          <div>
+                            <strong>Order Size: </strong>
+                            <span className="font-mono font-bold">{order.quantity} Cards</span> @ ₦{order.unitPrice.toLocaleString()} = <span className="text-emerald-400 font-mono font-extrabold text-sm">₦{order.totalAmount.toLocaleString()} NGN</span>
+                          </div>
+                          {order.notes && (
+                            <div className="text-[11px] text-neutral-400 italic">
+                              Notes: {order.notes}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Admin Actions */}
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <a
+                          href={waUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors shadow"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          <span>WhatsApp ({order.contactPhone})</span>
+                        </a>
+
+                        {order.status === 'pending' && (
+                          <button
+                            onClick={() => handleUpdateCardOrderStatus(order.id, 'contacted')}
+                            className="px-3 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-bold rounded-xl text-xs border border-neutral-700 transition-colors"
+                          >
+                            Mark Contacted
+                          </button>
+                        )}
+
+                        {order.status !== 'fulfilled' && (
+                          <button
+                            onClick={() => handleUpdateCardOrderStatus(order.id, 'fulfilled')}
+                            className="px-3 py-2 bg-neutral-800 hover:bg-neutral-700 text-emerald-400 font-bold rounded-xl text-xs border border-emerald-500/30 transition-colors"
+                          >
+                            Mark Fulfilled
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
       </main>
+
+      {/* Required Typing Confirmation Modal for Permanent Purge */}
+      {purgeTarget && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-neutral-900 border border-red-500/40 rounded-3xl max-w-md w-full p-6 text-white space-y-4 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center gap-3 text-red-400">
+              <div className="w-10 h-10 rounded-2xl bg-red-500/20 border border-red-500/30 flex items-center justify-center">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base text-white">Permanently Purge Restaurant?</h3>
+                <p className="text-xs text-red-400 font-medium">Irreversible database & auth credential destruction</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-neutral-300 leading-relaxed">
+              This will completely erase <strong>"{purgeTarget.name}"</strong> (slug: <code className="text-amber-400 font-mono font-bold">/{purgeTarget.slug}</code>), all menu items, dishes, shift logs, orders, and purge their owner login from Supabase Auth.
+            </p>
+
+            <div className="space-y-1.5 p-3.5 bg-neutral-950 rounded-2xl border border-neutral-800">
+              <label className="block text-[11px] text-neutral-400 font-bold">
+                To confirm, type <span className="text-red-400 font-mono font-black select-all">DELETE {purgeTarget.slug}</span> below:
+              </label>
+              <input
+                type="text"
+                autoFocus
+                value={purgeInput}
+                onChange={(e) => setPurgeInput(e.target.value)}
+                placeholder={`DELETE ${purgeTarget.slug}`}
+                className="w-full px-3 py-2 bg-neutral-900 border border-neutral-700 rounded-xl text-white font-mono text-xs focus:outline-none focus:border-red-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setPurgeTarget(null)}
+                className="px-4 py-2.5 rounded-xl border border-neutral-700 text-neutral-300 font-bold text-xs hover:bg-neutral-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={purgeInput.trim() !== `DELETE ${purgeTarget.slug}` || isPurging}
+                onClick={handleConfirmPurge}
+                className="px-5 py-2.5 bg-red-600 hover:bg-red-500 disabled:bg-neutral-800 disabled:text-neutral-500 text-white font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 shadow-lg disabled:cursor-not-allowed"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>{isPurging ? 'Purging...' : 'Permanently Purge & Delete User'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ALWAYS-VISIBLE MOBILE FLOATING ACTION BUTTON */}
       <div className="fixed bottom-20 right-4 z-40 md:hidden">

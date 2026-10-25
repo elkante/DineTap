@@ -158,7 +158,7 @@ export const FlipbookViewer: React.FC = () => {
           </span>
           <span className="text-neutral-600">·</span>
           <span className="font-mono text-[11px] text-amber-400/90 font-bold">
-            {currentPageIndex + 1} / {pages.length}
+            {currentPageIndex + 1} / {Math.max(1, pages.length)}
           </span>
         </div>
 

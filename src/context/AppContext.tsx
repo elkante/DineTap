@@ -31,9 +31,13 @@ import {
   OwnerSession,
   getStoredRestaurants,
   saveStoredRestaurants,
+  syncRestaurantTablesToSupabase,
+  syncRestaurantMetaToSupabase,
+  KEY_RESTAURANTS,
   supabase
 } from '../utils/supabase';
 import { getStoredPlans } from '../utils/pricingConfig';
+import { getNetworkVerifiedDate, formatNetworkTime } from '../utils/networkTime';
 
 export type AppViewMode = 'flipbook' | 'quick_menu' | 'editor' | 'nfc_qr' | 'orders' | 'super_admin';
 
@@ -91,7 +95,18 @@ interface AppContextType {
   updateCartItemQuantity: (index: number, quantity: number) => void;
   removeFromCart: (index: number) => void;
   clearCart: () => void;
-  placeOrder: (customerName: string, paymentMethod?: 'pos' | 'cash' | 'transfer', extraDetails?: { customerPhone?: string; subtotal?: number; vat?: number }) => Order | null;
+  placeOrder: (
+    customerName: string, 
+    paymentMethod?: 'pos' | 'cash' | 'transfer', 
+    extraDetails?: { 
+      customerPhone?: string; 
+      subtotal?: number; 
+      vat?: number;
+      orderType?: 'dine_in' | 'takeaway';
+      packagingFee?: number;
+      packCount?: number;
+    }
+  ) => Order | null;
   callWaiter: (reason: WaiterCall['reason']) => void;
   resolveWaiterCall: (id: string) => void;
   updateOrderStatus: (orderId: string, status: Order['status']) => void;
@@ -291,6 +306,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     window.addEventListener('tapmenu_session_updated', handleSessionUpdated);
 
+    const handlePlanUpdated = (e: any) => {
+      const { restaurantId, plan, tableLimit } = e.detail || {};
+      if (restaurantId) {
+        setRestaurants(prev => prev.map(r => 
+          r.id === restaurantId ? { ...r, plan, tableLimit: tableLimit !== undefined ? tableLimit : r.tableLimit } : r
+        ));
+      }
+    };
+    window.addEventListener('tapmenu_plan_updated', handlePlanUpdated);
+
+    const handleTablesUpdated = (e: any) => {
+      const { restaurantId, tables } = e.detail || {};
+      if (restaurantId && Array.isArray(tables)) {
+        setRestaurants(prev => prev.map(r => 
+          r.id === restaurantId ? { ...r, tables } : r
+        ));
+      }
+    };
+    window.addEventListener('tapmenu_tables_updated', handleTablesUpdated);
+
+    const handleStatusUpdated = (e: any) => {
+      const { restaurantId, status } = e.detail || {};
+      if (restaurantId && status) {
+        setRestaurants(prev => prev.map(r => 
+          r.id === restaurantId ? { ...r, status } : r
+        ));
+      }
+    };
+    window.addEventListener('tapmenu_status_updated', handleStatusUpdated);
+
     const handleRestaurantDeleted = (e: any) => {
       const deletedId = e.detail?.restaurantId;
       setRestaurants(prev => prev.filter(r => r.id !== deletedId));
@@ -299,6 +344,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return () => {
       window.removeEventListener('tapmenu_session_updated', handleSessionUpdated);
+      window.removeEventListener('tapmenu_plan_updated', handlePlanUpdated);
+      window.removeEventListener('tapmenu_tables_updated', handleTablesUpdated);
+      window.removeEventListener('tapmenu_status_updated', handleStatusUpdated);
       window.removeEventListener('tapmenu_restaurant_deleted', handleRestaurantDeleted);
     };
   }, []);
@@ -310,7 +358,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         r.slug.toLowerCase() === requestedSlug.toLowerCase() || 
         r.id === requestedSlug
       );
-      return match || EMPTY_RESTAURANT;
+      if (match) return match;
+
+      // ── Instant Customer View (0ms feedback) ──
+      // Derive restaurant name immediately from URL slug so customer sees the restaurant name at 0ms!
+      const humanizedName = requestedSlug
+        .split(/[-_+]+/)
+        .filter(Boolean)
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ');
+
+      return {
+        ...EMPTY_RESTAURANT,
+        id: requestedSlug,
+        slug: requestedSlug,
+        name: humanizedName || 'Restaurant Menu',
+        tagline: 'Fresh Kitchen & Bar',
+        logo: '🍽️',
+        pages: []
+      };
     }
     if (ownerSession?.restaurantId || ownerSession?.restaurantSlug) {
       const owned = restaurants.find(r => 
@@ -391,6 +457,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
           } else if (type === 'WAITER_CALL_RESOLVED' && event.data.callId) {
             setWaiterCalls(prev => prev.filter(c => c.id !== event.data.callId));
+          } else if (type === 'PLAN_UPDATED' && event.data.restaurantId) {
+            setRestaurants(prev => prev.map(r => 
+              r.id === event.data.restaurantId
+                ? { ...r, plan: event.data.plan, tableLimit: event.data.tableLimit !== undefined ? event.data.tableLimit : r.tableLimit }
+                : r
+            ));
+          } else if (type === 'TABLES_UPDATED' && event.data.restaurantId && Array.isArray(event.data.tables)) {
+            setRestaurants(prev => prev.map(r => 
+              r.id === event.data.restaurantId
+                ? { ...r, tables: event.data.tables }
+                : r
+            ));
+          } else if (type === 'STATUS_UPDATED' && event.data.restaurantId && event.data.status) {
+            setRestaurants(prev => prev.map(r => 
+              r.id === event.data.restaurantId
+                ? { ...r, status: event.data.status }
+                : r
+            ));
           }
         };
       }
@@ -418,6 +502,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setWaiterCalls(parsed);
           }
         } catch {}
+      } else if (e.key === KEY_RESTAURANTS && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setRestaurants(parsed);
+          }
+        } catch {}
       }
     };
     window.addEventListener('storage', handleStorageChange);
@@ -428,6 +519,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         supabaseChannel = supabase
           .channel(`kds-sync-${targetRestId}`)
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'restaurants' },
+            (payload: any) => {
+              if (!isMounted || !payload.new) return;
+              const row = payload.new;
+              setRestaurants(prev => prev.map(r => {
+                if (r.id === row.id || r.slug === row.slug) {
+                  return {
+                    ...r,
+                    plan: row.plan || r.plan,
+                    tableLimit: row.table_limit !== undefined ? (row.table_limit === null ? undefined : Number(row.table_limit)) : r.tableLimit,
+                    status: row.status || r.status,
+                    name: row.name || r.name,
+                    tagline: row.tagline || r.tagline
+                  };
+                }
+                return r;
+              }));
+            }
+          )
           .on(
             'postgres_changes',
             { event: '*', schema: 'public', table: 'orders' },
@@ -458,11 +570,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   subtotal: row.subtotal ? Number(row.subtotal) : undefined,
                   vat: row.vat ? Number(row.vat) : undefined,
                   total: Number(row.total) || 0,
-                  paymentMethod: row.payment_method || undefined,
+                  paymentMethod: row.payment_method || row.paymentMethod || undefined,
                   status: row.status || 'pending',
                   createdAt: safeTime,
                   createdAtTimestamp: safeTs,
-                  source: row.source || 'qr'
+                  source: row.source || 'qr',
+                  orderType: row.order_type || row.orderType || 'dine_in',
+                  packagingFee: row.packaging_fee ? Number(row.packaging_fee) : undefined,
+                  packCount: row.pack_count ? Number(row.pack_count) : undefined
                 };
 
                 setOrders(prev => {
@@ -552,9 +667,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               });
             }
 
-            // Merge: remote orders are authoritative, but preserve optimistic local orders
+            // Merge: remote orders are authoritative, but preserve optimistic local fields (like paymentMethod if missing in remote)
             const mergedMap = new Map<string, Order>();
-            remoteOrders.forEach(o => mergedMap.set(o.id, o));
+            remoteOrders.forEach(o => {
+              const local = prevMap.get(o.id);
+              mergedMap.set(o.id, {
+                ...o,
+                paymentMethod: o.paymentMethod || local?.paymentMethod || undefined,
+                orderType: o.orderType || local?.orderType || 'dine_in',
+                packagingFee: o.packagingFee ?? local?.packagingFee,
+                packCount: o.packCount ?? local?.packCount,
+              });
+            });
             prev.forEach(o => {
               if (!mergedMap.has(o.id)) {
                 mergedMap.set(o.id, o);
@@ -659,6 +783,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       saveStoredRestaurants(updated);
       return updated;
     });
+    if (activeRestaurantId) {
+      syncRestaurantMetaToSupabase(activeRestaurantId, meta);
+    }
     showNotification('Restaurant profile updated');
   };
 
@@ -674,6 +801,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       saveStoredRestaurants(updated);
       return updated;
     });
+    if (activeRestaurantId) {
+      syncRestaurantMetaToSupabase(activeRestaurantId, { design: { ...activeRestaurant.design, ...designUpdates } });
+    }
   };
 
   const applyTemplate = (templateId: MenuTemplateId) => {
@@ -980,71 +1110,105 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       urlPayload: `${origin}/?r=${activeRestaurant.slug}&table=${encodeURIComponent(tableNumber)}`
     };
 
-    setRestaurants(prev => prev.map(r => {
-      if (r.id !== activeRestaurantId) return r;
-      return { ...r, tables: [...r.tables, newTag] };
-    }));
+    let updatedTables: TableNfcTag[] = [];
+    setRestaurants(prev => {
+      const updated = prev.map(r => {
+        if (r.id !== activeRestaurantId) return r;
+        updatedTables = [...r.tables, newTag];
+        return { ...r, tables: updatedTables };
+      });
+      saveStoredRestaurants(updated);
+      return updated;
+    });
+
+    if (activeRestaurantId && updatedTables.length > 0) {
+      syncRestaurantTablesToSupabase(activeRestaurantId, updatedTables);
+    }
   };
 
   const updateTableStatus = (tableId: string, status: NfcStatus) => {
-    setRestaurants(prev => prev.map(r => {
-      if (r.id !== activeRestaurantId) return r;
-      return {
-        ...r,
-        tables: r.tables.map(t => t.id === tableId ? { ...t, nfcStatus: status } : t)
-      };
-    }));
+    let updatedTables: TableNfcTag[] = [];
+    setRestaurants(prev => {
+      const updated = prev.map(r => {
+        if (r.id !== activeRestaurantId) return r;
+        updatedTables = r.tables.map(t => t.id === tableId ? { ...t, nfcStatus: status } : t);
+        return { ...r, tables: updatedTables };
+      });
+      saveStoredRestaurants(updated);
+      return updated;
+    });
+
+    if (activeRestaurantId && updatedTables.length > 0) {
+      syncRestaurantTablesToSupabase(activeRestaurantId, updatedTables);
+    }
   };
 
   const replaceDamagedTag = (tableId: string, newSerial: string) => {
-    setRestaurants(prev => prev.map(r => {
-      if (r.id !== activeRestaurantId) return r;
-      return {
-        ...r,
-        tables: r.tables.map(t => {
+    let updatedTables: TableNfcTag[] = [];
+    setRestaurants(prev => {
+      const updated = prev.map(r => {
+        if (r.id !== activeRestaurantId) return r;
+        updatedTables = r.tables.map(t => {
           if (t.id !== tableId) return t;
           return { ...t, ntagSerial: newSerial, nfcStatus: 'active' };
-        })
-      };
-    }));
+        });
+        return { ...r, tables: updatedTables };
+      });
+      saveStoredRestaurants(updated);
+      return updated;
+    });
+
+    if (activeRestaurantId && updatedTables.length > 0) {
+      syncRestaurantTablesToSupabase(activeRestaurantId, updatedTables);
+    }
   };
 
   const bulkGenerateTables = (count: number) => {
     if (count < 1 || count > 100) return;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     let actualCountAdded = 0;
+    let updatedTables: TableNfcTag[] = [];
 
-    setRestaurants(prev => prev.map(r => {
-      if (r.id !== activeRestaurantId) return r;
-      const maxTables = getTenantMaxTables(r);
-      const existing = r.tables.length;
+    setRestaurants(prev => {
+      const updated = prev.map(r => {
+        if (r.id !== activeRestaurantId) return r;
+        const maxTables = getTenantMaxTables(r);
+        const existing = r.tables.length;
 
-      if (maxTables !== null && existing >= maxTables) {
-        showNotification(`🚫 Table limit reached (${maxTables} max). Upgrade your plan or contact admin.`);
-        return r;
-      }
+        if (maxTables !== null && existing >= maxTables) {
+          showNotification(`🚫 Table limit reached (${maxTables} max). Upgrade your plan or contact admin.`);
+          return r;
+        }
 
-      const allowedCount = maxTables !== null ? Math.min(count, maxTables - existing) : count;
-      if (allowedCount <= 0) return r;
-      actualCountAdded = allowedCount;
+        const allowedCount = maxTables !== null ? Math.min(count, maxTables - existing) : count;
+        if (allowedCount <= 0) return r;
+        actualCountAdded = allowedCount;
 
-      const slug = r.slug;
-      const newTables = Array.from({ length: allowedCount }, (_, i) => {
-        const num = existing + i + 1;
-        return {
-          id: `tbl-${r.id}-${num}-${Date.now() + i}`,
-          tableNumber: `Table ${num}`,
-          label: `Table ${num}`,
-          section: 'Dining Room',
-          ntagSerial: `04:${Math.floor(Math.random() * 89 + 10)}:${num.toString().padStart(2, '0')}:${Math.floor(Math.random() * 89 + 10)}`,
-          nfcStatus: 'active' as const,
-          totalTaps: 0,
-          totalScans: 0,
-          urlPayload: `${origin}/?r=${slug}&table=Table+${num}`
-        };
+        const slug = r.slug;
+        const newTables = Array.from({ length: allowedCount }, (_, i) => {
+          const num = existing + i + 1;
+          return {
+            id: `tbl-${r.id}-${num}-${Date.now() + i}`,
+            tableNumber: `Table ${num}`,
+            label: `Table ${num}`,
+            section: 'Dining Room',
+            ntagSerial: `04:${Math.floor(Math.random() * 89 + 10)}:${num.toString().padStart(2, '0')}:${Math.floor(Math.random() * 89 + 10)}`,
+            nfcStatus: 'active' as const,
+            totalTaps: 0,
+            totalScans: 0,
+            urlPayload: `${origin}/?r=${slug}&table=Table+${num}`
+          };
+        });
+        updatedTables = [...r.tables, ...newTables];
+        return { ...r, tables: updatedTables };
       });
-      return { ...r, tables: [...r.tables, ...newTables] };
-    }));
+      saveStoredRestaurants(updated);
+      return updated;
+    });
+
+    if (activeRestaurantId && updatedTables.length > 0) {
+      syncRestaurantTablesToSupabase(activeRestaurantId, updatedTables);
+    }
 
     if (actualCountAdded > 0) {
       showNotification(`Generated ${actualCountAdded} new table${actualCountAdded > 1 ? 's' : ''}`);
@@ -1052,10 +1216,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteTable = (tableId: string) => {
-    setRestaurants(prev => prev.map(r => {
-      if (r.id !== activeRestaurantId) return r;
-      return { ...r, tables: r.tables.filter(t => t.id !== tableId) };
-    }));
+    let updatedTables: TableNfcTag[] = [];
+    setRestaurants(prev => {
+      const updated = prev.map(r => {
+        if (r.id !== activeRestaurantId) return r;
+        updatedTables = r.tables.filter(t => t.id !== tableId);
+        return { ...r, tables: updatedTables };
+      });
+      saveStoredRestaurants(updated);
+      return updated;
+    });
+
+    if (activeRestaurantId) {
+      syncRestaurantTablesToSupabase(activeRestaurantId, updatedTables);
+    }
     showNotification('Table removed');
   };
 
@@ -1106,14 +1280,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const placeOrder = (
     customerName: string, 
     paymentMethod: 'pos' | 'cash' | 'transfer' = 'pos',
-    extraDetails?: { customerPhone?: string; subtotal?: number; vat?: number }
+    extraDetails?: { 
+      customerPhone?: string; 
+      subtotal?: number; 
+      vat?: number;
+      orderType?: 'dine_in' | 'takeaway';
+      packagingFee?: number;
+      packCount?: number;
+    }
   ): Order | null => {
     if (cart.length === 0) return null;
 
     const calcSubtotal = extraDetails?.subtotal ?? cart.reduce((sum, ci) => sum + ci.foodItem.price * ci.quantity, 0);
-    const calcVat = extraDetails?.vat ?? Math.round(calcSubtotal * 0.075);
-    const total = calcSubtotal + calcVat;
-    const orderTable = currentTable || 'Table 1';
+    const packagingFee = extraDetails?.packagingFee ?? 0;
+    const calcVat = extraDetails?.vat ?? Math.round((calcSubtotal + packagingFee) * 0.075);
+    const total = calcSubtotal + packagingFee + calcVat;
+    const orderType = extraDetails?.orderType || 'dine_in';
+    const orderTable = orderType === 'takeaway' ? 'Takeout' : (currentTable || 'Table 1');
 
     let targetRestaurantId = activeRestaurant.id;
     if (!targetRestaurantId && requestedSlug) {
@@ -1124,13 +1307,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       targetRestaurantId = restaurants[0].id;
     }
 
-    const nowTs = Date.now();
+    // Use network-verified date/time so local device clock tampering is prevented
+    const networkDate = getNetworkVerifiedDate();
+    const nowTs = networkDate.getTime();
     const uniqueId = `ord-${nowTs.toString().slice(-5)}-${Math.floor(Math.random() * 89 + 10)}`;
     const newOrder: Order = {
       id: uniqueId,
       restaurantId: targetRestaurantId,
       tableNumber: orderTable,
-      customerName: customerName.trim() || `Diner at ${orderTable}`,
+      customerName: customerName.trim() || (orderType === 'takeaway' ? 'Takeout Customer' : `Diner at ${orderTable}`),
       customerPhone: extraDetails?.customerPhone?.trim() || undefined,
       items: [...cart],
       subtotal: calcSubtotal,
@@ -1138,9 +1323,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       total,
       paymentMethod,
       status: 'pending',
-      createdAt: new Date(nowTs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      createdAt: formatNetworkTime(networkDate),
       createdAtTimestamp: nowTs,
-      source: isNfcSource ? 'nfc' : 'qr'
+      source: isNfcSource ? 'nfc' : 'qr',
+      orderType,
+      packagingFee: packagingFee > 0 ? packagingFee : undefined,
+      packCount: extraDetails?.packCount
     };
 
     setOrders(prev => [newOrder, ...prev.filter(o => o.id !== newOrder.id)]);

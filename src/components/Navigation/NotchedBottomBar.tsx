@@ -37,8 +37,8 @@ export interface KitchenNotchedBarProps {
 
 export interface KitchenDashboardNotchedBarProps {
   variant: 'kitchen_dashboard';
-  activeTab: 'kds' | 'menu' | 'tables' | 'settings';
-  onTabChange: (tab: 'kds' | 'menu' | 'tables' | 'settings') => void;
+  activeTab: 'kds' | 'menu' | 'inventory' | 'expenses' | 'archive' | 'tables' | 'settings';
+  onTabChange: (tab: 'kds' | 'menu' | 'inventory' | 'expenses' | 'archive' | 'tables' | 'settings') => void;
   activeOrdersCount: number;
   waiterCallsCount: number;
   totalDishesCount: number;
